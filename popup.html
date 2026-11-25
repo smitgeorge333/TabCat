@@ -23,6 +23,11 @@
         <span class="dock-icon">👕</span>
         <span class="dock-label" data-i18n="navWardrobe">Гардероб</span>
       </button>
+      <button class="dock-btn" data-tab="quests" type="button" id="questsDockBtn">
+        <span class="dock-icon">🏆</span>
+        <span class="dock-label" data-i18n="navQuests">Квесты</span>
+        <span id="questsDot" class="dock-dot hidden"></span>
+      </button>
     </div>
   </nav>
 
@@ -31,7 +36,7 @@
     <header class="header">
       <div>
         <div class="title-row">
-          <h1 class="title">TabCat</h1>
+          <h1 id="appTitle" class="title">TabCat</h1>
           <span id="levelBadge" class="level-badge">Ур. 1</span>
         </div>
         <div class="xp-bar-wrap" title="Опыт котика">
@@ -276,6 +281,14 @@
         <div id="wardrobeMood" class="mood-text"></div>
       </section>
 
+      <section class="section shop-box">
+        <div class="section-label" data-i18n="catNameLabel">Имя котика</div>
+        <form id="catNameForm" class="add-domain-form">
+          <input id="catNameInput" type="text" maxlength="18" placeholder="e.g. Mochi" autocomplete="off" />
+          <button type="submit" class="mini-btn" data-i18n="btnSaveName">Сохранить</button>
+        </form>
+      </section>
+
       <section class="section">
         <div class="section-label" data-i18n="coatColorLabel">Окрас котика</div>
         <div class="color-grid" id="colorGrid">
@@ -321,6 +334,24 @@
       <section class="section shop-box">
         <div class="section-label" data-i18n="myBgsLabel">Фон домика</div>
         <div id="wardrobeBgGrid" class="shop-grid"></div>
+      </section>
+    </main>
+
+    <!-- ==================== VIEW 4: QUESTS & ACHIEVEMENTS ==================== -->
+    <main id="view-quests" class="view">
+      <div class="view-hero">
+        <h2 class="view-title" data-i18n="questsTitle">Квесты и Ачивки 🏆</h2>
+        <p class="view-subtitle" data-i18n="questsSubtitle">Выполняй задания дня и открывай редкие награды</p>
+      </div>
+
+      <section class="section shop-box">
+        <div class="section-label" data-i18n="dailyQuestsLabel">📅 Задания на сегодня</div>
+        <div id="dailyQuestsList" class="quest-list"></div>
+      </section>
+
+      <section class="section shop-box">
+        <div class="section-label" data-i18n="achievementsLabel">🏅 Достижения</div>
+        <div id="achievementsList" class="quest-list"></div>
       </section>
     </main>
   </div>

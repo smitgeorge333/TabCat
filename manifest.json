@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TabCat — Browser Pet",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "A cute pixel-art cat that walks on your browser tabs, celebrates closed tabs, naps on distracting sites, and helps you focus with Pomodoro.",
   "permissions": [
     "storage",

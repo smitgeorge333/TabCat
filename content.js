@@ -5,18 +5,18 @@
   if (window.top !== window.self) return;
   if (!globalThis.TabCatSprites) return;
 
-  const CONTENT_VERSION = '0.7.1';
+  const CONTENT_VERSION = '0.8.0';
   const existingHost = document.getElementById('tabcat-shadow-host');
   if (existingHost) {
     if (existingHost.dataset.version === CONTENT_VERSION) return;
     existingHost.remove();
   }
 
-  const { renderFrame, renderMouse, renderEmptyBox, FRAMES, GRID_W, GRID_H } = globalThis.TabCatSprites;
+  const { renderFrame, renderMouse, renderEmptyBox, renderTrampoline, renderCatBed, FRAMES, GRID_W, GRID_H } = globalThis.TabCatSprites;
   const i18n = globalThis.TabCatI18n;
 
-  function tr(key) {
-    return i18n ? i18n.t(state.lang, key) : key;
+  function tr(key, vars) {
+    return i18n ? i18n.t(state.lang, key, vars) : key;
   }
 
   function pickTr(key) {
@@ -261,6 +261,30 @@
       display: block;
     }
 
+    .tabcat-prop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 72px;
+      height: 28px;
+      pointer-events: auto;
+      cursor: grab;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+      display: none;
+      will-change: transform;
+    }
+    .tabcat-prop.dragging { cursor: grabbing; }
+    .tabcat-prop.active { display: block; }
+    .tabcat-prop canvas {
+      width: 72px;
+      height: 28px;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      display: block;
+    }
+
     .tabcat-toy-banner {
       position: fixed;
       top: 14px;
@@ -401,6 +425,24 @@
   boxEl.appendChild(boxCanvas);
   renderEmptyBox(boxCanvas);
 
+  // Pixel trampoline on floor
+  const trampEl = document.createElement('div');
+  trampEl.className = 'tabcat-prop';
+  const trampCanvas = document.createElement('canvas');
+  trampCanvas.width = 72;
+  trampCanvas.height = 28;
+  trampEl.appendChild(trampCanvas);
+  renderTrampoline(trampCanvas, 0);
+
+  // Cozy pixel cat bed on floor
+  const bedEl = document.createElement('div');
+  bedEl.className = 'tabcat-prop';
+  const bedCanvas = document.createElement('canvas');
+  bedCanvas.width = 72;
+  bedCanvas.height = 28;
+  bedEl.appendChild(bedCanvas);
+  renderCatBed(bedCanvas);
+
   // Toy exit banner
   const toyBanner = document.createElement('button');
   toyBanner.type = 'button';
@@ -432,6 +474,8 @@
   layer.appendChild(laserDot);
   layer.appendChild(mouseEl);
   layer.appendChild(boxEl);
+  layer.appendChild(trampEl);
+  layer.appendChild(bedEl);
   layer.appendChild(toyBanner);
   layer.appendChild(kittenEl);
   layer.appendChild(actor);
@@ -483,6 +527,7 @@
   const initialWidth = window.innerWidth || 1000;
   const state = {
     lang: 'en',
+    catName: '',
     color: 'ginger',
     equippedHat: 'none',
     equippedSweater: 'none',
@@ -579,6 +624,27 @@
     dragOffsetY: 0
   };
 
+  // Trampoline state (draggable + 360 flip jump!)
+  const toyTramp = {
+    x: Math.floor(initialWidth * 0.42),
+    y: (window.innerHeight || 700) - 30,
+    isDragging: false,
+    dragMoved: false,
+    dragOffsetX: 0,
+    flipUntil: 0,
+    flipStart: 0
+  };
+
+  // Cozy cat bed state (draggable!)
+  const toyBed = {
+    x: Math.floor(initialWidth * 0.28),
+    y: (window.innerHeight || 700) - 30,
+    isDragging: false,
+    dragMoved: false,
+    dragOffsetX: 0,
+    catSleepingInBed: false
+  };
+
   let bubbleTimer = null;
 
   function isCatnipActive() {
@@ -596,19 +662,24 @@
     const isLaser = canShow && state.activeToy === 'laser';
     const isMouse = canShow && state.activeToy === 'mouse';
     const isBox = canShow && state.activeToy === 'box';
+    const isTramp = canShow && state.activeToy === 'trampoline';
+    const isBed = canShow && state.activeToy === 'bed';
 
     yarnSvg.classList.toggle('active', isYarn);
     laserDot.classList.toggle('active', isLaser);
     mouseEl.classList.toggle('active', isMouse);
-    // Show empty box on floor when box toy is active AND cat is not currently inside it
     boxEl.classList.toggle('active', isBox && !toyBox.catInside);
+    trampEl.classList.toggle('active', isTramp);
+    bedEl.classList.toggle('active', isBed);
 
-    const anyToy = isYarn || isLaser || isMouse || isBox;
+    const anyToy = isYarn || isLaser || isMouse || isBox || isTramp || isBed;
     toyBanner.classList.toggle('active', anyToy);
     if (isYarn) toyBanner.textContent = tr('yarnBanner');
     else if (isLaser) toyBanner.textContent = tr('laserBanner');
     else if (isMouse) toyBanner.textContent = tr('mouseBanner');
     else if (isBox) toyBanner.textContent = tr('boxBanner');
+    else if (isTramp) toyBanner.textContent = tr('trampolineBanner');
+    else if (isBed) toyBanner.textContent = tr('bedBanner');
 
     kittenEl.classList.toggle('active', canShow && state.hasKitten && state.kittenEnabled);
   }
@@ -654,6 +725,70 @@
   }
   boxEl.addEventListener('pointerup', endBoxDrag);
   boxEl.addEventListener('pointercancel', endBoxDrag);
+
+  // Draggable trampoline (click to summon cat for a flip!)
+  trampEl.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    toyTramp.isDragging = true;
+    toyTramp.dragMoved = false;
+    toyTramp.dragOffsetX = e.clientX - toyTramp.x;
+    trampEl.classList.add('dragging');
+    trampEl.setPointerCapture(e.pointerId);
+  });
+  trampEl.addEventListener('pointermove', (e) => {
+    if (!toyTramp.isDragging) return;
+    const nx = e.clientX - toyTramp.dragOffsetX;
+    if (Math.abs(nx - toyTramp.x) > 4) toyTramp.dragMoved = true;
+    toyTramp.x = Math.max(12, Math.min((window.innerWidth || 1000) - 84, nx));
+  });
+  function endTrampDrag(e) {
+    if (!toyTramp.isDragging) return;
+    toyTramp.isDragging = false;
+    trampEl.classList.remove('dragging');
+    try { trampEl.releasePointerCapture(e.pointerId); } catch (_) {}
+    if (!toyTramp.dragMoved && state.activeToy === 'trampoline') {
+      state.targetX = toyTramp.x + 36 - catWidth / 2;
+      state.targetY = getFloorY();
+      state.mode = 'walk';
+      state.modeUntil = Date.now() + 8000;
+    }
+  }
+  trampEl.addEventListener('pointerup', endTrampDrag);
+  trampEl.addEventListener('pointercancel', endTrampDrag);
+
+  // Draggable cat bed (click to summon cat for a cozy nap!)
+  bedEl.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    toyBed.isDragging = true;
+    toyBed.dragMoved = false;
+    toyBed.dragOffsetX = e.clientX - toyBed.x;
+    bedEl.classList.add('dragging');
+    bedEl.setPointerCapture(e.pointerId);
+  });
+  bedEl.addEventListener('pointermove', (e) => {
+    if (!toyBed.isDragging) return;
+    const nx = e.clientX - toyBed.dragOffsetX;
+    if (Math.abs(nx - toyBed.x) > 4) toyBed.dragMoved = true;
+    toyBed.x = Math.max(12, Math.min((window.innerWidth || 1000) - 84, nx));
+    if (toyBed.catSleepingInBed) {
+      state.x = toyBed.x + 36 - catWidth / 2;
+    }
+  });
+  function endBedDrag(e) {
+    if (!toyBed.isDragging) return;
+    toyBed.isDragging = false;
+    bedEl.classList.remove('dragging');
+    try { bedEl.releasePointerCapture(e.pointerId); } catch (_) {}
+    if (!toyBed.dragMoved && state.activeToy === 'bed') {
+      toyBed.catSleepingInBed = false;
+      state.targetX = toyBed.x + 36 - catWidth / 2;
+      state.targetY = getFloorY();
+      state.mode = 'walk';
+      state.modeUntil = Date.now() + 8000;
+    }
+  }
+  bedEl.addEventListener('pointerup', endBedDrag);
+  bedEl.addEventListener('pointercancel', endBedDrag);
 
   // Temporary 3-claw scratch mark on the screen!
   function spawnClawScratch(cx, cy) {
@@ -937,6 +1072,31 @@
     const now = Date.now();
     if (state.yarnMode || state.activeToy === 'laser' || state.activeToy === 'mouse') return;
 
+    if (state.activeToy === 'trampoline' && Math.random() < 0.65) {
+      state.targetX = toyTramp.x + 36 - catWidth / 2;
+      state.targetY = getFloorY();
+      state.facingLeft = state.targetX < state.x;
+      state.mode = 'walk';
+      state.modeUntil = now + 9000;
+      return;
+    }
+
+    if (state.activeToy === 'bed') {
+      if (toyBed.catSleepingInBed) {
+        state.mode = 'sleep';
+        state.modeUntil = now + 10000;
+        return;
+      }
+      if (Math.random() < 0.65) {
+        state.targetX = toyBed.x + 36 - catWidth / 2;
+        state.targetY = getFloorY();
+        state.facingLeft = state.targetX < state.x;
+        state.mode = 'walk';
+        state.modeUntil = now + 9000;
+        return;
+      }
+    }
+
     if (state.activeToy === 'box') {
       if (toyBox.catInside) {
         toyBox.catInside = false;
@@ -1148,6 +1308,7 @@
   chrome.storage.local.get(
     [
       'lang',
+      'catName',
       'catColor',
       'equippedHat',
       'equippedSweater',
@@ -1169,6 +1330,7 @@
     ],
     (data) => {
       if (data.lang) state.lang = data.lang;
+      if (typeof data.catName === 'string') state.catName = data.catName;
       if (data.catColor) state.color = data.catColor;
       if (data.equippedHat) state.equippedHat = data.equippedHat;
       if (data.equippedSweater) state.equippedSweater = data.equippedSweater;
@@ -1195,6 +1357,22 @@
       updateToysUI();
       syncEnvironmentState();
       renderFrame(canvas, state.mode, state.frameIdx, state.color, state.facingLeft, state.equippedHat, state.equippedSweater, state.equippedAccessory);
+
+      // Gentle morning / late-night greeting once per session
+      setTimeout(() => {
+        if (document.visibilityState !== 'visible' || !state.visible) return;
+        const h = new Date().getHours();
+        const name = state.catName.trim() || 'TabCat';
+        try {
+          if (h >= 6 && h <= 11 && !sessionStorage.getItem('tabcat_greeted_morning')) {
+            sessionStorage.setItem('tabcat_greeted_morning', '1');
+            showBubble(tr('phraseMorning', { name }), 4000);
+          } else if ((h >= 23 || h <= 4) && !sessionStorage.getItem('tabcat_greeted_night')) {
+            sessionStorage.setItem('tabcat_greeted_night', '1');
+            showBubble(tr('phraseNight', { name }), 4200);
+          }
+        } catch (_) {}
+      }, 1400);
     }
   );
 
@@ -1204,6 +1382,7 @@
       state.lang = changes.lang.newValue || 'en';
       applyLangTexts();
     }
+    if (changes.catName) state.catName = changes.catName.newValue || '';
     if (changes.catColor) state.color = changes.catColor.newValue || 'ginger';
     if (changes.equippedHat) state.equippedHat = changes.equippedHat.newValue || 'none';
     if (changes.equippedSweater) state.equippedSweater = changes.equippedSweater.newValue || 'none';
@@ -1417,6 +1596,28 @@
       if (state.activeToy === 'box') {
         boxEl.style.transform = `translate3d(${Math.round(toyBox.x)}px, ${Math.round(toyBox.y)}px, 0)`;
       }
+      if (state.activeToy === 'trampoline') {
+        toyTramp.y = (window.innerHeight || 700) - 30;
+        trampEl.style.transform = `translate3d(${Math.round(toyTramp.x)}px, ${Math.round(toyTramp.y)}px, 0)`;
+      }
+      if (state.activeToy === 'bed') {
+        toyBed.y = (window.innerHeight || 700) - 30;
+        bedEl.style.transform = `translate3d(${Math.round(toyBed.x)}px, ${Math.round(toyBed.y)}px, 0)`;
+      }
+
+      if (wallNow < toyTramp.flipUntil) {
+        const fp = (wallNow - toyTramp.flipStart) / (toyTramp.flipUntil - toyTramp.flipStart);
+        const arc = Math.sin(fp * Math.PI);
+        const jumpHeight = Math.min(260, (window.innerHeight || 700) * 0.35);
+        state.y = getFloorY() - arc * jumpHeight;
+        canvas.style.transform = `rotate(${Math.round(fp * 360)}deg)`;
+        state.mode = 'happy';
+        renderTrampoline(trampCanvas, fp < 0.2 ? 1 : 0);
+      } else if (toyTramp.flipUntil > 0 && wallNow >= toyTramp.flipUntil) {
+        toyTramp.flipUntil = 0;
+        canvas.style.transform = 'rotate(0deg)';
+        renderTrampoline(trampCanvas, 0);
+      }
 
       if (state.isDragging && state.dragMoved) {
         state.mode = 'held';
@@ -1537,6 +1738,19 @@
               state.mode = 'box';
               state.modeUntil = wallNow + 7000;
               updateToysUI();
+            } else if (state.activeToy === 'trampoline' && Math.abs((state.x + catWidth / 2) - (toyTramp.x + 36)) < 26) {
+              toyTramp.flipStart = wallNow;
+              toyTramp.flipUntil = wallNow + 1050;
+              state.mode = 'happy';
+              state.modeUntil = wallNow + 2200;
+              spawnHearts(3);
+              showBubble(tr('phraseTrampoline'), 2600);
+              chrome.runtime.sendMessage({ type: 'YARN_CATCH' }).catch(() => {});
+            } else if (state.activeToy === 'bed' && Math.abs((state.x + catWidth / 2) - (toyBed.x + 36)) < 26) {
+              toyBed.catSleepingInBed = true;
+              state.mode = 'sleep';
+              state.modeUntil = wallNow + 12000;
+              showBubble(tr('phraseBed'), 2800);
             } else {
               state.mode = 'sit';
               state.modeUntil = wallNow + (zoomies ? 500 : 3200 + Math.random() * 4000);

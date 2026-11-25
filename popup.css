@@ -113,6 +113,17 @@ body {
 .left-dock:hover .dock-btn:nth-child(1) { transition-delay: 0.03s; }
 .left-dock:hover .dock-btn:nth-child(2) { transition-delay: 0.08s; }
 .left-dock:hover .dock-btn:nth-child(3) { transition-delay: 0.13s; }
+.left-dock:hover .dock-btn:nth-child(4) { transition-delay: 0.18s; }
+
+.dock-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff3b5c;
+  margin-left: auto;
+  box-shadow: 0 0 6px rgba(255, 59, 92, 0.8);
+}
+.dock-dot.hidden { display: none; }
 
 .left-dock:hover .dock-btn:hover {
   transform: translateX(4px) scale(1.14);
@@ -949,4 +960,74 @@ body {
 .stage.bg-space .need-top {
   color: #f4f6ff;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+/* ==================== QUESTS & ACHIEVEMENTS ==================== */
+.quest-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.quest-row {
+  background: #fdf8f3;
+  border: 1.5px solid #e6d5c7;
+  border-radius: 10px;
+  padding: 7px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.quest-row.done {
+  border-color: #6bc484;
+  background: #f2fbf4;
+}
+
+.quest-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #471e0d;
+}
+
+.quest-bar {
+  height: 6px;
+  background: #eadcd0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.quest-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f5a623, #eb6b34);
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.quest-row.done .quest-fill {
+  background: linear-gradient(90deg, #38c793, #2e9e6d);
+}
+
+.claim-btn {
+  appearance: none;
+  border: none;
+  border-radius: 7px;
+  padding: 4px 9px;
+  background: #2e8540;
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.claim-btn:hover { background: #246b33; }
+.quest-status-done {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #2e8540;
+  white-space: nowrap;
 }

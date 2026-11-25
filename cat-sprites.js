@@ -84,13 +84,27 @@
       P: '#00e5ff', // glowing cyan nose
       G: '#00e5ff',
       F: '#58b4e8'
+    },
+    golden: {
+      name: 'Золотой',
+      hint: 'За 100 вкладок',
+      swatch: '#ffd700',
+      O: '#5c3b00', // rich bronze-gold outline
+      B: '#ffd84d', // shimmering gold fur
+      S: '#e6a800', // deep gold stripes
+      C: '#fff6cc', // bright sparkle cream
+      E: '#2e1a00', // crisp dark eyes
+      P: '#ff8fab', // rosy nose
+      G: '#6cd4ff',
+      F: '#58b4e8'
     }
   };
 
   const RARE_SKINS = [
     { id: 'siamese', price: 7, icon: '🐈', swatch: '#f3e5d0' },
     { id: 'calico', price: 8, icon: '🐱', swatch: '#f7a541' },
-    { id: 'cyber', price: 10, icon: '🤖', swatch: '#26324d' }
+    { id: 'cyber', price: 10, icon: '🤖', swatch: '#26324d' },
+    { id: 'golden', price: 0, achievementOnly: true, icon: '🌟', swatch: '#ffd700' }
   ];
 
   const ACCESSORIES = [
@@ -110,7 +124,9 @@
   const TOYS = [
     { id: 'laser', price: 5, icon: '🔴' },
     { id: 'mouse', price: 6, icon: '🐭' },
-    { id: 'box', price: 7, icon: '📦' }
+    { id: 'box', price: 7, icon: '📦' },
+    { id: 'trampoline', price: 7, icon: '🎪' },
+    { id: 'bed', price: 6, icon: '🛏️' }
   ];
 
   const BACKGROUNDS = [
@@ -189,8 +205,12 @@
     { id: 'none', name: 'Без шапки', price: 0, icon: '🐾' },
     { id: 'beanie', name: 'Шапочка', price: 3, icon: '🧶' },
     { id: 'bow', name: 'Бантик', price: 4, icon: '🎀' },
+    { id: 'cap', name: 'Кепка', price: 4, icon: '🧢' },
+    { id: 'chef', name: 'Повар', price: 5, icon: '👨‍🍳' },
     { id: 'wizard', name: 'Маг', price: 6, icon: '🧙' },
-    { id: 'crown', name: 'Корона', price: 8, icon: '👑' }
+    { id: 'viking', name: 'Викинг', price: 7, icon: '⛑️' },
+    { id: 'crown', name: 'Корона', price: 8, icon: '👑' },
+    { id: 'halo', name: 'Нимб', price: 0, achievementOnly: true, icon: '😇' }
   ];
 
   // Sweater catalog
@@ -199,6 +219,9 @@
     { id: 'cozy_red', name: 'Свитер', price: 4, icon: '🧶' },
     { id: 'mint_hoodie', name: 'Худи', price: 5, icon: '🧥' },
     { id: 'sky_stripe', name: 'Полоска', price: 6, icon: '👕' },
+    { id: 'hacker', name: 'Хакер', price: 6, icon: '💻' },
+    { id: 'sakura', name: 'Сакура', price: 7, icon: '🌸' },
+    { id: 'tuxedo', name: 'Смокинг', price: 7, icon: '🤵' },
     { id: 'royal_cape', name: 'Мантия', price: 9, icon: '✨' }
   ];
 
@@ -206,6 +229,9 @@
     cozy_red:   { m: '#e6495c', d: '#b82d40', a: '#fff3e6' },
     mint_hoodie:{ m: '#38c793', d: '#22996e', a: '#e8fff5' },
     sky_stripe: { m: '#4da6ff', d: '#2673cc', a: '#ffffff' },
+    hacker:     { m: '#1f242d', d: '#00e676', a: '#2e3645' },
+    sakura:     { m: '#ffb3cc', d: '#ff6b9e', a: '#fff5f8' },
+    tuxedo:     { m: '#222430', d: '#ffffff', a: '#e63946' },
     royal_cape: { m: '#734dff', d: '#4f2cc7', a: '#ffd13b' }
   };
 
@@ -243,13 +269,16 @@
   const HAT_COLORS = {
     o: '#3b1c12', // hat outline
     r: '#e6495c', // red beanie / ruby
-    w: '#fff7f0', // white pom-pom / trim
+    w: '#fff7f0', // white pom-pom / chef / horns
     k: '#ff70a6', // pink bow
     d: '#d6457d', // dark pink bow shade
-    y: '#ffd13b', // gold crown / star
+    y: '#ffd13b', // gold crown / star / halo
     a: '#e09f1f', // gold shade
     v: '#6d4aff', // wizard purple
-    u: '#4e2fc7'  // wizard dark purple
+    u: '#4e2fc7', // wizard dark purple
+    b: '#3b82f6', // cap blue
+    n: '#1d4ed8', // cap dark blue
+    s: '#94a3b8'  // viking steel
   };
 
   // Compact hat pixel matrices anchored relative to head center-top (headX, headY)
@@ -269,6 +298,27 @@
       'okdkoookdo',
       '.oo....oo.'
     ],
+    cap: [
+      '..........',
+      '..oooooo..',
+      '.obbbbbbo.',
+      '.obbbbbbnn',
+      '.ooooooooo'
+    ],
+    chef: [
+      '..oo..oo..',
+      '.owwoowwo.',
+      '.owwwwwwo.',
+      '..owwwwo..',
+      '..oooooo..'
+    ],
+    viking: [
+      'w........w',
+      'wo.oooo.ow',
+      '.osssssso.',
+      '.osysysso.',
+      '..oooooo..'
+    ],
     crown: [
       '..........',
       '.o..oo..o.',
@@ -282,6 +332,13 @@
       '..ovyyvo..',
       '.ouvvvvuo.',
       'oooooooooo'
+    ],
+    halo: [
+      '..yyyyyy..',
+      '.y......y.',
+      '..yyyyyy..',
+      '..........',
+      '..........'
     ]
   };
 
@@ -1087,6 +1144,68 @@
     }
   }
 
+  // Pixel-art trampoline (18x8)
+  function renderTrampoline(canvas, bounceFrame = 0) {
+    const ctx = canvas.getContext('2d');
+    const grid = bounceFrame
+      ? [
+          '..................',
+          '.oooooooooooooooo.',
+          'orbbbbbbbbbbbbbbro',
+          '.oooooooooooooooo.',
+          '..oo..........oo..',
+          '..oo..........oo..',
+          '..oo..........oo..'
+        ]
+      : [
+          '.oooooooooooooooo.',
+          'orbbbbbbbbbbbbbbro',
+          '.oooooooooooooooo.',
+          '..oo..........oo..',
+          '..oo..........oo..',
+          '..oo..........oo..',
+          '..................'
+        ];
+    const colors = { o: '#362218', r: '#e6495c', b: '#3b82f6' };
+    const px = Math.min(canvas.width / 18, canvas.height / 7);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingEnabled = false;
+    for (let y = 0; y < grid.length; y++) {
+      for (let x = 0; x < 18; x++) {
+        const ch = grid[y][x];
+        if (!colors[ch]) continue;
+        ctx.fillStyle = colors[ch];
+        ctx.fillRect(Math.floor(x * px), Math.floor(y * px), Math.ceil(px), Math.ceil(px));
+      }
+    }
+  }
+
+  // Cozy pixel cat bed (18x8)
+  function renderCatBed(canvas) {
+    const ctx = canvas.getContext('2d');
+    const grid = [
+      '....oooooooooo....',
+      '..ooppppppppppoo..',
+      '.opppccccccccpppo.',
+      'opppccccccccccpppo',
+      'oppppppppppppppppo',
+      'opddddddddddddddpo',
+      '.oooooooooooooooo.'
+    ];
+    const colors = { o: '#471e0d', p: '#e66478', d: '#b83b50', c: '#fff0db' };
+    const px = Math.min(canvas.width / 18, canvas.height / 7);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingEnabled = false;
+    for (let y = 0; y < grid.length; y++) {
+      for (let x = 0; x < 18; x++) {
+        const ch = grid[y][x];
+        if (!colors[ch]) continue;
+        ctx.fillStyle = colors[ch];
+        ctx.fillRect(Math.floor(x * px), Math.floor(y * px), Math.ceil(px), Math.ceil(px));
+      }
+    }
+  }
+
   globalThis.TabCatSprites = {
     GRID_W,
     GRID_H,
@@ -1101,6 +1220,8 @@
     FRAMES,
     renderFrame,
     renderMouse,
-    renderEmptyBox
+    renderEmptyBox,
+    renderTrampoline,
+    renderCatBed
   };
 })();

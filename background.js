@@ -30,8 +30,12 @@ const HAT_PRICES = {
   none: 0,
   beanie: 3,
   bow: 4,
+  cap: 4,
+  chef: 5,
   wizard: 6,
-  crown: 8
+  viking: 7,
+  crown: 8,
+  halo: 0 // Achievement reward (5 Pomodoros)
 };
 
 const SWEATER_PRICES = {
@@ -39,6 +43,9 @@ const SWEATER_PRICES = {
   cozy_red: 4,
   mint_hoodie: 5,
   sky_stripe: 6,
+  hacker: 6,
+  sakura: 7,
+  tuxedo: 7,
   royal_cape: 9
 };
 
@@ -59,7 +66,9 @@ const TREAT_PRICES = {
 const TOY_PRICES = {
   laser: 5,
   mouse: 6,
-  box: 7
+  box: 7,
+  trampoline: 7,
+  bed: 6
 };
 
 const BG_PRICES = {
@@ -73,13 +82,38 @@ const BG_PRICES = {
 const SKIN_PRICES = {
   siamese: 7,
   calico: 8,
-  cyber: 10
+  cyber: 10,
+  golden: 0 // Achievement reward (100 closed tabs)
 };
 
 const KITTEN_PRICE = 12;
 
+function getTodayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function makeFreshDailyQuests() {
+  return {
+    date: getTodayKey(),
+    tabsToday: 0,
+    pomoToday: 0,
+    petToday: false,
+    feedToday: false,
+    claimed: { close10: false, pomo1: false, care2: false }
+  };
+}
+
+const DEFAULT_ACHIEVEMENTS = {
+  first10: false,
+  tabs100: false,
+  pomo5: false,
+  shop3: false
+};
+
 const DEFAULT_STATE = {
   lang: 'en', // 'en' | 'ru' | 'zh'
+  catName: '',
   catColor: 'ginger',
   visible: true,
   allowFreeDrag: false,
@@ -92,7 +126,7 @@ const DEFAULT_STATE = {
   ownedAccessories: [],
   equippedAccessory: 'none',
   ownedToys: [],
-  activeToy: 'none', // 'none' | 'laser' | 'mouse' | 'box'
+  activeToy: 'none', // 'none' | 'laser' | 'mouse' | 'box' | 'trampoline' | 'bed'
   ownedBackgrounds: [],
   equippedBackground: 'default',
   ownedSkins: [],
@@ -100,6 +134,9 @@ const DEFAULT_STATE = {
   kittenEnabled: false,
   catnipUntilTs: 0,
   yarnMode: false,
+  shopPurchasesCount: 0,
+  dailyQuests: makeFreshDailyQuests(),
+  achievements: DEFAULT_ACHIEVEMENTS,
   tabsClosed: 0,
   fish: 3, // Starter treat so you can feed right away!
   starterFishGiven: true,
@@ -145,6 +182,67 @@ function isDomainSleepy(hostname, sleepyList) {
 
 function calcLevel(xp) {
   return Math.floor((xp || 0) / XP_PER_LEVEL) + 1;
+}
+
+async function updateQuestsAndAchievements(updates = {}) {
+  const data = await chrome.storage.local.get([
+    'dailyQuests',
+    'achievements',
+    'tabsClosed',
+    'pomodoro',
+    'shopPurchasesCount',
+    'fish',
+    'ownedSkins',
+    'ownedHats'
+  ]);
+
+  const today = getTodayKey();
+  let dq = data.dailyQuests && data.dailyQuests.date === today
+    ? { ...data.dailyQuests, claimed: { ...(data.dailyQuests.claimed || {}) } }
+    : makeFreshDailyQuests();
+
+  if (updates.tabsDelta) dq.tabsToday = (dq.tabsToday || 0) + updates.tabsDelta;
+  if (updates.pomoDelta) dq.pomoToday = (dq.pomoToday || 0) + updates.pomoDelta;
+  if (updates.pet) dq.petToday = true;
+  if (updates.feed) dq.feedToday = true;
+
+  const nextPurchases = (data.shopPurchasesCount || 0) + (updates.purchaseDelta || 0);
+  const ach = { ...DEFAULT_ACHIEVEMENTS, ...(data.achievements || {}) };
+  let bonusFish = 0;
+  const ownedSkins = Array.isArray(data.ownedSkins) ? [...data.ownedSkins] : [];
+  const ownedHats = Array.isArray(data.ownedHats) ? [...data.ownedHats] : [];
+
+  const totalTabs = data.tabsClosed || 0;
+  const totalPomo = (data.pomodoro && data.pomodoro.sessionsCompleted) || 0;
+
+  if (!ach.first10 && totalTabs >= 10) {
+    ach.first10 = true;
+    bonusFish += 2;
+  }
+  if (!ach.tabs100 && totalTabs >= 100) {
+    ach.tabs100 = true;
+    if (!ownedSkins.includes('golden')) ownedSkins.push('golden');
+  }
+  if (!ach.pomo5 && totalPomo >= 5) {
+    ach.pomo5 = true;
+    if (!ownedHats.includes('halo')) ownedHats.push('halo');
+  }
+  if (!ach.shop3 && nextPurchases >= 3) {
+    ach.shop3 = true;
+    bonusFish += 5;
+  }
+
+  const patch = {
+    dailyQuests: dq,
+    achievements: ach,
+    shopPurchasesCount: nextPurchases,
+    ownedSkins,
+    ownedHats
+  };
+  if (bonusFish > 0) {
+    patch.fish = (data.fish || 0) + bonusFish;
+  }
+  await chrome.storage.local.set(patch);
 }
 
 async function ensureDefaults() {
@@ -321,6 +419,7 @@ async function checkPomodoroCompletion() {
     });
 
     chrome.alarms.create('tabcat-pomodoro-end', { when: nextEndTs });
+    await updateQuestsAndAchievements({ pomoDelta: 1 });
   } else if (pomo.phase === 'break') {
     const nextPomo = {
       ...pomo,
@@ -405,6 +504,7 @@ async function feedCat() {
       ts: Date.now()
     }
   });
+  await updateQuestsAndAchievements({ feed: true });
 
   return { ok: true, fish: nextFish, stats: nextStats };
 }
@@ -492,6 +592,7 @@ chrome.tabs.onRemoved.addListener(async () => {
       }
     });
     await evaluateActiveTab();
+    await updateQuestsAndAchievements({ tabsDelta: 1 });
   } catch (err) {
     console.warn('TabCat onRemoved error:', err);
   }
@@ -501,19 +602,55 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || !msg.type) return;
 
   if (msg.type === 'PET_CAT') {
-    modifyStats({ pleasure: 6 }).then((stats) => {
-      chrome.storage.local.set({
+    modifyStats({ pleasure: 6 }).then(async (stats) => {
+      await updateQuestsAndAchievements({ pet: true });
+      await chrome.storage.local.set({
         lastEvent: {
           type: 'pet_from_popup',
           ts: Date.now()
         }
-      }).then(() => sendResponse({ ok: true, stats }));
+      });
+      sendResponse({ ok: true, stats });
     });
     return true;
   }
 
   if (msg.type === 'PET_ON_PAGE') {
-    modifyStats({ pleasure: 6 }).then((stats) => sendResponse({ ok: true, stats }));
+    modifyStats({ pleasure: 6 }).then(async (stats) => {
+      await updateQuestsAndAchievements({ pet: true });
+      sendResponse({ ok: true, stats });
+    });
+    return true;
+  }
+
+  if (msg.type === 'CLAIM_QUEST') {
+    const questId = msg.questId;
+    const rewards = { close10: 3, pomo1: 4, care2: 2 };
+    if (!(questId in rewards)) {
+      sendResponse({ ok: false });
+      return;
+    }
+    chrome.storage.local.get(['dailyQuests', 'fish']).then(async (data) => {
+      const today = getTodayKey();
+      const dq = data.dailyQuests && data.dailyQuests.date === today
+        ? { ...data.dailyQuests, claimed: { ...(data.dailyQuests.claimed || {}) } }
+        : makeFreshDailyQuests();
+
+      const done =
+        (questId === 'close10' && (dq.tabsToday || 0) >= 10) ||
+        (questId === 'pomo1' && (dq.pomoToday || 0) >= 1) ||
+        (questId === 'care2' && dq.petToday && dq.feedToday);
+
+      if (!done || dq.claimed[questId]) {
+        sendResponse({ ok: false });
+        return;
+      }
+
+      dq.claimed[questId] = true;
+      const nextFish = (data.fish || 0) + rewards[questId];
+      await chrome.storage.local.set({ dailyQuests: dq, fish: nextFish });
+      sendResponse({ ok: true, fish: nextFish, dailyQuests: dq });
+    });
     return true;
   }
 
@@ -564,6 +701,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         equippedHat: hatId,
         lastEvent: { type: 'hat_equipped', ts: Date.now() }
       });
+      await updateQuestsAndAchievements({ purchaseDelta: 1 });
       sendResponse({ ok: true, purchased: true, equippedHat: hatId, ownedHats: owned, fish });
     });
     return true;
@@ -606,6 +744,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         equippedSweater: sweaterId,
         lastEvent: { type: 'hat_equipped', ts: Date.now() }
       });
+      await updateQuestsAndAchievements({ purchaseDelta: 1 });
       sendResponse({ ok: true, purchased: true, equippedSweater: sweaterId, ownedSweaters: owned, fish });
     });
     return true;
@@ -644,6 +783,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         equippedAccessory: accId,
         lastEvent: { type: 'hat_equipped', ts: Date.now() }
       });
+      await updateQuestsAndAchievements({ purchaseDelta: 1 });
       sendResponse({ ok: true, purchased: true, equippedAccessory: accId, ownedAccessories: owned, fish });
     });
     return true;
@@ -734,6 +874,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         activeToy: toyId,
         yarnMode: false
       });
+      await updateQuestsAndAchievements({ purchaseDelta: 1 });
       sendResponse({ ok: true, purchased: true, activeToy: toyId, ownedToys: owned, fish });
     });
     return true;

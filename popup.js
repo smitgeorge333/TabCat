@@ -7,8 +7,15 @@
   const views = {
     menu: document.getElementById('view-menu'),
     shop: document.getElementById('view-shop'),
-    wardrobe: document.getElementById('view-wardrobe')
+    wardrobe: document.getElementById('view-wardrobe'),
+    quests: document.getElementById('view-quests')
   };
+  const questsDot = document.getElementById('questsDot');
+  const dailyQuestsList = document.getElementById('dailyQuestsList');
+  const achievementsList = document.getElementById('achievementsList');
+  const appTitleEl = document.getElementById('appTitle');
+  const catNameForm = document.getElementById('catNameForm');
+  const catNameInput = document.getElementById('catNameInput');
 
   // Shop subtabs
   const subtabButtons = Array.from(document.querySelectorAll('.subtab-btn'));
@@ -140,8 +147,13 @@
   document.querySelectorAll('.cart-canvas').forEach(drawPixelCart);
 
   let lang = 'en';
+  let catName = '';
   let activeTab = 'menu';
   let pendingDelivery = null;
+  let dailyQuests = null;
+  let achievements = {};
+  let totalTabsClosed = 0;
+  let shopPurchasesCount = 0;
 
   let currentColor = 'ginger';
   let ownedHats = [];
@@ -206,9 +218,11 @@
     });
 
     domainInput.placeholder = tr('domainPlaceholder');
+    if (catNameInput) catNameInput.placeholder = tr('catNamePlaceholder');
     pomoTestPreset.textContent = tr('pomoTest');
     fishBadge.title = tr('fishTooltip');
     tabsBadge.title = tr('tabsTooltip');
+    appTitleEl.textContent = catName.trim() || 'TabCat';
 
     Array.from(sleepyLimitSelect.options).forEach((opt) => {
       opt.textContent = `${opt.value} ${tr('minUnit')}`;
@@ -226,6 +240,7 @@
     renderSleepyChips();
     renderShop();
     renderWardrobe();
+    renderQuestsAndAchievements();
   }
 
   function switchTab(nextTab) {
@@ -314,19 +329,139 @@
     btn.className = 'shop-card';
     if (isOwned) btn.classList.add('owned');
     if (isEquipped) btn.classList.add('equipped');
-    btn.innerHTML = `
-      <span class="shop-icon">${icon}</span>
-      <span class="shop-name">${label}</span>
-      <span class="shop-price">${priceText}</span>
-    `;
+
+    const iconEl = document.createElement('span');
+    iconEl.className = 'shop-icon';
+    iconEl.textContent = icon;
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'shop-name';
+    nameEl.textContent = label;
+
+    const priceEl = document.createElement('span');
+    priceEl.className = 'shop-price';
+    priceEl.textContent = priceText;
+
+    btn.appendChild(iconEl);
+    btn.appendChild(nameEl);
+    btn.appendChild(priceEl);
     btn.addEventListener('click', onClick);
     return btn;
   }
 
+  function renderQuestsAndAchievements() {
+    if (!dailyQuestsList || !achievementsList) return;
+    const dq = dailyQuests || { tabsToday: 0, pomoToday: 0, petToday: false, feedToday: false, claimed: {} };
+    const claimed = dq.claimed || {};
+
+    const careCount = (dq.petToday ? 1 : 0) + (dq.feedToday ? 1 : 0);
+    const items = [
+      { id: 'close10', label: tr('q_close10'), cur: Math.min(10, dq.tabsToday || 0), max: 10, reward: 3 },
+      { id: 'pomo1', label: tr('q_pomo1'), cur: Math.min(1, dq.pomoToday || 0), max: 1, reward: 4 },
+      { id: 'care2', label: tr('q_care2'), cur: careCount, max: 2, reward: 2 }
+    ];
+
+    let anyClaimable = false;
+    dailyQuestsList.innerHTML = '';
+
+    items.forEach((q) => {
+      const done = q.cur >= q.max;
+      const isClaimed = Boolean(claimed[q.id]);
+      if (done && !isClaimed) anyClaimable = true;
+
+      const row = document.createElement('div');
+      row.className = 'quest-row' + (done ? ' done' : '');
+
+      const top = document.createElement('div');
+      top.className = 'quest-top';
+
+      const title = document.createElement('span');
+      title.textContent = q.label;
+      top.appendChild(title);
+
+      if (isClaimed) {
+        const st = document.createElement('span');
+        st.className = 'quest-status-done';
+        st.textContent = tr('claimedText');
+        top.appendChild(st);
+      } else if (done) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'claim-btn';
+        btn.textContent = tr('claimBtn', { reward: q.reward });
+        btn.addEventListener('click', () => {
+          chrome.runtime.sendMessage({ type: 'CLAIM_QUEST', questId: q.id }, (res) => {
+            if (res && res.ok) {
+              dailyQuests = res.dailyQuests;
+              updateFishUI(res.fish);
+              renderQuestsAndAchievements();
+            }
+          });
+        });
+        top.appendChild(btn);
+      } else {
+        const prog = document.createElement('span');
+        prog.textContent = `${q.cur}/${q.max}`;
+        top.appendChild(prog);
+      }
+
+      const bar = document.createElement('div');
+      bar.className = 'quest-bar';
+      const fill = document.createElement('div');
+      fill.className = 'quest-fill';
+      fill.style.width = `${Math.round((q.cur / q.max) * 100)}%`;
+      bar.appendChild(fill);
+
+      row.appendChild(top);
+      row.appendChild(bar);
+      dailyQuestsList.appendChild(row);
+    });
+
+    if (questsDot) questsDot.classList.toggle('hidden', !anyClaimable);
+
+    // Achievements
+    achievementsList.innerHTML = '';
+    const achItems = [
+      { id: 'first10', label: tr('ach_first10'), cur: Math.min(10, totalTabsClosed), max: 10 },
+      { id: 'tabs100', label: tr('ach_tabs100'), cur: Math.min(100, totalTabsClosed), max: 100 },
+      { id: 'pomo5', label: tr('ach_pomo5'), cur: Math.min(5, (pomodoro && pomodoro.sessionsCompleted) || 0), max: 5 },
+      { id: 'shop3', label: tr('ach_shop3'), cur: Math.min(3, shopPurchasesCount), max: 3 }
+    ];
+
+    achItems.forEach((a) => {
+      const unlocked = Boolean(achievements && achievements[a.id]);
+      const row = document.createElement('div');
+      row.className = 'quest-row' + (unlocked ? ' done' : '');
+
+      const top = document.createElement('div');
+      top.className = 'quest-top';
+
+      const title = document.createElement('span');
+      title.textContent = a.label;
+      top.appendChild(title);
+
+      const st = document.createElement('span');
+      st.className = unlocked ? 'quest-status-done' : '';
+      st.textContent = unlocked ? tr('achUnlocked') : `${a.cur}/${a.max}`;
+      top.appendChild(st);
+
+      const bar = document.createElement('div');
+      bar.className = 'quest-bar';
+      const fill = document.createElement('div');
+      fill.className = 'quest-fill';
+      fill.style.width = `${unlocked ? 100 : Math.round((a.cur / a.max) * 100)}%`;
+      bar.appendChild(fill);
+
+      row.appendChild(top);
+      row.appendChild(bar);
+      achievementsList.appendChild(row);
+    });
+  }
+
   function renderShop() {
-    // 1. Hats
+    // 1. Hats (skip 'none' & achievementOnly in Shop)
     shopHatGrid.innerHTML = '';
-    HATS.filter((h) => h.id !== 'none').forEach((hat) => {
+    HATS.filter((h) => h.id !== 'none' && !h.achievementOnly).forEach((hat) => {
       const isOwned = ownedHats.includes(hat.id);
       const isEquipped = equippedHat === hat.id;
       const label = tr(`hat_${hat.id}`);
@@ -518,9 +653,9 @@
       }));
     });
 
-    // 7. Rare Skins + Mini-Kitten Buddy
+    // 7. Rare Skins + Mini-Kitten Buddy (skip achievementOnly in Shop)
     shopSkinGrid.innerHTML = '';
-    RARE_SKINS.forEach((skin) => {
+    RARE_SKINS.filter((s) => !s.achievementOnly).forEach((skin) => {
       const isOwned = ownedSkins.includes(skin.id);
       const isEquipped = currentColor === skin.id;
       const label = tr(`skin_${skin.id}`);
@@ -974,6 +1109,7 @@
   chrome.storage.local.get(
     [
       'lang',
+      'catName',
       'catColor',
       'ownedHats', 'equippedHat',
       'ownedSweaters', 'equippedSweater',
@@ -986,11 +1122,18 @@
       'yarnMode',
       'visible', 'allowFreeDrag', 'allowFreeRoam',
       'tabsClosed', 'fish', 'xp', 'level', 'stats',
+      'dailyQuests', 'achievements', 'shopPurchasesCount',
       'sleepyDomains', 'sleepyLimitMinutes', 'isActiveSiteSleepy', 'sleepySinceTs',
       'pomodoro'
     ],
     (data) => {
       lang = data.lang || 'en';
+      catName = typeof data.catName === 'string' ? data.catName : '';
+      if (catNameInput) catNameInput.value = catName;
+      totalTabsClosed = data.tabsClosed || 0;
+      shopPurchasesCount = data.shopPurchasesCount || 0;
+      dailyQuests = data.dailyQuests || null;
+      achievements = data.achievements || {};
       setActiveColorUI(data.catColor || 'ginger');
       ownedHats = Array.isArray(data.ownedHats) ? data.ownedHats : [];
       equippedHat = data.equippedHat || 'none';
@@ -1055,7 +1198,18 @@
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'local') return;
     if (changes.lang && changes.lang.newValue) { lang = changes.lang.newValue; applyTranslations(); }
-    if (changes.tabsClosed) tabsClosedEl.textContent = String(changes.tabsClosed.newValue || 0);
+    if (changes.catName) {
+      catName = changes.catName.newValue || '';
+      appTitleEl.textContent = catName.trim() || 'TabCat';
+    }
+    if (changes.tabsClosed) {
+      totalTabsClosed = changes.tabsClosed.newValue || 0;
+      tabsClosedEl.textContent = String(totalTabsClosed);
+      renderQuestsAndAchievements();
+    }
+    if (changes.dailyQuests) { dailyQuests = changes.dailyQuests.newValue; renderQuestsAndAchievements(); }
+    if (changes.achievements) { achievements = changes.achievements.newValue || {}; renderQuestsAndAchievements(); }
+    if (changes.shopPurchasesCount) { shopPurchasesCount = changes.shopPurchasesCount.newValue || 0; renderQuestsAndAchievements(); }
     if (changes.fish) updateFishUI(changes.fish.newValue);
     if (changes.stats) updateStatsUI(changes.stats.newValue);
     if (changes.xp || changes.level) {
@@ -1203,6 +1357,16 @@
       applyTranslations();
     });
   });
+
+  if (catNameForm) {
+    catNameForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      catName = catNameInput.value.trim().slice(0, 18);
+      appTitleEl.textContent = catName || 'TabCat';
+      chrome.storage.local.set({ catName });
+      wardrobeMood.textContent = tr('moodColor');
+    });
+  }
 
   feedBtn.addEventListener('click', feedCatFromPopup);
   petBtn.addEventListener('click', animatePetInPopup);
