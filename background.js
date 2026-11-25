@@ -116,6 +116,7 @@ const DEFAULT_STATE = {
   catName: '',
   catColor: 'ginger',
   visible: true,
+  hiddenDomains: [],
   allowFreeDrag: false,
   allowFreeRoam: false,
   catScale: 3,

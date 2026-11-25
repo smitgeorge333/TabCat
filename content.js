@@ -5,7 +5,7 @@
   if (window.top !== window.self) return;
   if (!globalThis.TabCatSprites) return;
 
-  const CONTENT_VERSION = '0.8.0';
+  const CONTENT_VERSION = '0.9.2';
   const existingHost = document.getElementById('tabcat-shadow-host');
   if (existingHost) {
     if (existingHost.dataset.version === CONTENT_VERSION) return;
@@ -533,6 +533,7 @@
     equippedSweater: 'none',
     equippedAccessory: 'none',
     visible: true,
+    hiddenDomains: [],
     allowFreeDrag: false,
     allowFreeRoam: false,
     yarnMode: false,
@@ -624,24 +625,27 @@
     dragOffsetY: 0
   };
 
-  // Trampoline state (draggable + 360 flip jump!)
+  // Trampoline state (draggable in X & Y + 360 flip jump!)
   const toyTramp = {
     x: Math.floor(initialWidth * 0.42),
     y: (window.innerHeight || 700) - 30,
     isDragging: false,
     dragMoved: false,
     dragOffsetX: 0,
+    dragOffsetY: 0,
     flipUntil: 0,
-    flipStart: 0
+    flipStart: 0,
+    flipBaseY: getFloorY()
   };
 
-  // Cozy cat bed state (draggable!)
+  // Cozy cat bed state (draggable in X & Y!)
   const toyBed = {
     x: Math.floor(initialWidth * 0.28),
     y: (window.innerHeight || 700) - 30,
     isDragging: false,
     dragMoved: false,
     dragOffsetX: 0,
+    dragOffsetY: 0,
     catSleepingInBed: false
   };
 
@@ -651,13 +655,23 @@
     return state.catnipUntilTs > Date.now();
   }
 
+  const currentHost = (location.hostname || '').toLowerCase().replace(/^www\./, '');
+
+  function isHiddenOnThisSite() {
+    if (!currentHost || !Array.isArray(state.hiddenDomains)) return false;
+    return state.hiddenDomains.some((d) => currentHost === d || currentHost.endsWith('.' + d));
+  }
+
+  function isEffectivelyVisible() {
+    return state.visible && !isHiddenOnThisSite() && !document.fullscreenElement;
+  }
+
   function updateVisibility() {
-    const isFullscreen = Boolean(document.fullscreenElement);
-    layer.classList.toggle('hidden', !state.visible || isFullscreen);
+    layer.classList.toggle('hidden', !isEffectivelyVisible());
   }
 
   function updateToysUI() {
-    const canShow = state.visible && !document.fullscreenElement;
+    const canShow = isEffectivelyVisible();
     const isYarn = canShow && state.yarnMode;
     const isLaser = canShow && state.activeToy === 'laser';
     const isMouse = canShow && state.activeToy === 'mouse';
@@ -684,6 +698,27 @@
     kittenEl.classList.toggle('active', canShow && state.hasKitten && state.kittenEnabled);
   }
 
+  function getClampedWalkTarget(rawX, rawY) {
+    const vw = window.innerWidth || 1000;
+    const maxX = Math.max(12, vw - catWidth - 12);
+    const floorY = getFloorY();
+    const tx = Math.max(12, Math.min(maxX, rawX));
+    const ty = Math.max(12, Math.min(floorY, rawY));
+    return { x: tx, y: ty };
+  }
+
+  function walkToProp(propCenterX, propBottomY, durationMs = 8000) {
+    const target = getClampedWalkTarget(
+      propCenterX - catWidth / 2,
+      propBottomY - catHeight
+    );
+    state.targetX = target.x;
+    state.targetY = target.y;
+    state.facingLeft = target.x < state.x;
+    state.mode = 'walk';
+    state.modeUntil = Date.now() + durationMs;
+  }
+
   // Draggable cardboard box (drag to move, or click to summon cat inside!)
   boxEl.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
@@ -706,7 +741,11 @@
     const vh = window.innerHeight || 700;
     toyBox.x = Math.max(12, Math.min(vw - 76, nextX));
     if (state.allowFreeDrag) {
-      toyBox.y = Math.max(16, Math.min(vh - 38, nextY));
+      toyBox.y = Math.max(Math.max(16, catHeight - 24), Math.min(vh - 38, nextY));
+    }
+    // Live-update cat's destination if it was already walking toward the box!
+    if (state.mode === 'walk' && state.activeToy === 'box' && state.targetX !== null) {
+      walkToProp(toyBox.x + 32, toyBox.y + 36, 8000);
     }
   });
 
@@ -717,29 +756,38 @@
     try { boxEl.releasePointerCapture(e.pointerId); } catch (_) {}
 
     if (!toyBox.dragMoved && state.activeToy === 'box') {
-      state.targetX = toyBox.x;
-      state.targetY = Math.max(12, toyBox.y - (catHeight - 36));
-      state.mode = 'walk';
-      state.modeUntil = Date.now() + 8000;
+      walkToProp(toyBox.x + 32, toyBox.y + 36, 8000);
     }
   }
   boxEl.addEventListener('pointerup', endBoxDrag);
   boxEl.addEventListener('pointercancel', endBoxDrag);
 
-  // Draggable trampoline (click to summon cat for a flip!)
+  // Draggable trampoline (drag in X or 2D, click to summon cat for a 360 flip!)
   trampEl.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
     toyTramp.isDragging = true;
     toyTramp.dragMoved = false;
     toyTramp.dragOffsetX = e.clientX - toyTramp.x;
+    toyTramp.dragOffsetY = e.clientY - toyTramp.y;
     trampEl.classList.add('dragging');
     trampEl.setPointerCapture(e.pointerId);
   });
   trampEl.addEventListener('pointermove', (e) => {
     if (!toyTramp.isDragging) return;
     const nx = e.clientX - toyTramp.dragOffsetX;
-    if (Math.abs(nx - toyTramp.x) > 4) toyTramp.dragMoved = true;
-    toyTramp.x = Math.max(12, Math.min((window.innerWidth || 1000) - 84, nx));
+    const ny = state.allowFreeDrag ? (e.clientY - toyTramp.dragOffsetY) : toyTramp.y;
+    if (Math.abs(nx - toyTramp.x) > 4 || Math.abs(ny - toyTramp.y) > 4) {
+      toyTramp.dragMoved = true;
+    }
+    const vw = window.innerWidth || 1000;
+    const vh = window.innerHeight || 700;
+    toyTramp.x = Math.max(12, Math.min(vw - 84, nx));
+    if (state.allowFreeDrag) {
+      toyTramp.y = Math.max(Math.max(24, catHeight), Math.min(vh - 30, ny));
+    }
+    if (state.mode === 'walk' && state.activeToy === 'trampoline' && state.targetX !== null) {
+      walkToProp(toyTramp.x + 36, toyTramp.y + 28, 8000);
+    }
   });
   function endTrampDrag(e) {
     if (!toyTramp.isDragging) return;
@@ -747,31 +795,41 @@
     trampEl.classList.remove('dragging');
     try { trampEl.releasePointerCapture(e.pointerId); } catch (_) {}
     if (!toyTramp.dragMoved && state.activeToy === 'trampoline') {
-      state.targetX = toyTramp.x + 36 - catWidth / 2;
-      state.targetY = getFloorY();
-      state.mode = 'walk';
-      state.modeUntil = Date.now() + 8000;
+      walkToProp(toyTramp.x + 36, toyTramp.y + 28, 8000);
     }
   }
   trampEl.addEventListener('pointerup', endTrampDrag);
   trampEl.addEventListener('pointercancel', endTrampDrag);
 
-  // Draggable cat bed (click to summon cat for a cozy nap!)
+  // Draggable cat bed (drag in X or 2D, click to summon cat for a cozy nap!)
   bedEl.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
     toyBed.isDragging = true;
     toyBed.dragMoved = false;
     toyBed.dragOffsetX = e.clientX - toyBed.x;
+    toyBed.dragOffsetY = e.clientY - toyBed.y;
     bedEl.classList.add('dragging');
     bedEl.setPointerCapture(e.pointerId);
   });
   bedEl.addEventListener('pointermove', (e) => {
     if (!toyBed.isDragging) return;
     const nx = e.clientX - toyBed.dragOffsetX;
-    if (Math.abs(nx - toyBed.x) > 4) toyBed.dragMoved = true;
-    toyBed.x = Math.max(12, Math.min((window.innerWidth || 1000) - 84, nx));
+    const ny = state.allowFreeDrag ? (e.clientY - toyBed.dragOffsetY) : toyBed.y;
+    if (Math.abs(nx - toyBed.x) > 4 || Math.abs(ny - toyBed.y) > 4) {
+      toyBed.dragMoved = true;
+    }
+    const vw = window.innerWidth || 1000;
+    const vh = window.innerHeight || 700;
+    toyBed.x = Math.max(12, Math.min(vw - 84, nx));
+    if (state.allowFreeDrag) {
+      toyBed.y = Math.max(Math.max(16, catHeight - 20), Math.min(vh - 30, ny));
+    }
     if (toyBed.catSleepingInBed) {
-      state.x = toyBed.x + 36 - catWidth / 2;
+      const pos = getClampedWalkTarget(toyBed.x + 36 - catWidth / 2, toyBed.y + 28 - catHeight);
+      state.x = pos.x;
+      state.y = pos.y;
+    } else if (state.mode === 'walk' && state.activeToy === 'bed' && state.targetX !== null) {
+      walkToProp(toyBed.x + 36, toyBed.y + 28, 8000);
     }
   });
   function endBedDrag(e) {
@@ -781,10 +839,7 @@
     try { bedEl.releasePointerCapture(e.pointerId); } catch (_) {}
     if (!toyBed.dragMoved && state.activeToy === 'bed') {
       toyBed.catSleepingInBed = false;
-      state.targetX = toyBed.x + 36 - catWidth / 2;
-      state.targetY = getFloorY();
-      state.mode = 'walk';
-      state.modeUntil = Date.now() + 8000;
+      walkToProp(toyBed.x + 36, toyBed.y + 28, 8000);
     }
   }
   bedEl.addEventListener('pointerup', endBedDrag);
@@ -950,6 +1005,7 @@
 
   function triggerHappy(phrase) {
     toyBox.catInside = false;
+    toyBed.catSleepingInBed = false;
     state.mode = 'happy';
     state.modeUntil = Date.now() + 2400;
     state.targetX = null;
@@ -962,6 +1018,7 @@
 
   function triggerFeed(phrase, emoji = '🐟') {
     toyBox.catInside = false;
+    toyBed.catSleepingInBed = false;
     state.mode = 'eat';
     state.modeUntil = Date.now() + 3000;
     state.targetX = null;
@@ -975,9 +1032,13 @@
 
   function triggerPet(phrase, notifyBackground = false) {
     if (toyBox.catInside) {
-      // Clicking cat inside box makes him hop out playfully!
       toyBox.catInside = false;
       triggerHappy(tr('phraseBox'));
+      return;
+    }
+    if (toyBed.catSleepingInBed) {
+      toyBed.catSleepingInBed = false;
+      triggerHappy(tr('phraseBed'));
       return;
     }
     if (state.sleepStage === 'sleep') {
@@ -1073,11 +1134,7 @@
     if (state.yarnMode || state.activeToy === 'laser' || state.activeToy === 'mouse') return;
 
     if (state.activeToy === 'trampoline' && Math.random() < 0.65) {
-      state.targetX = toyTramp.x + 36 - catWidth / 2;
-      state.targetY = getFloorY();
-      state.facingLeft = state.targetX < state.x;
-      state.mode = 'walk';
-      state.modeUntil = now + 9000;
+      walkToProp(toyTramp.x + 36, toyTramp.y + 28, 9000);
       return;
     }
 
@@ -1088,11 +1145,7 @@
         return;
       }
       if (Math.random() < 0.65) {
-        state.targetX = toyBed.x + 36 - catWidth / 2;
-        state.targetY = getFloorY();
-        state.facingLeft = state.targetX < state.x;
-        state.mode = 'walk';
-        state.modeUntil = now + 9000;
+        walkToProp(toyBed.x + 36, toyBed.y + 28, 9000);
         return;
       }
     }
@@ -1106,11 +1159,7 @@
         return;
       }
       if (Math.random() < 0.65) {
-        state.targetX = toyBox.x;
-        state.targetY = getFloorY();
-        state.facingLeft = toyBox.x < state.x;
-        state.mode = 'walk';
-        state.modeUntil = now + 9000;
+        walkToProp(toyBox.x + 32, toyBox.y + 36, 9000);
         return;
       }
     }
@@ -1180,17 +1229,30 @@
     if (vw && vw >= catWidth + 24) {
       const maxX = Math.max(12, vw - catWidth - 12);
       state.x = Math.max(12, Math.min(maxX, state.x));
-      toyBox.x = Math.max(24, Math.min(vw - 88, toyBox.x));
+      toyBox.x = Math.max(12, Math.min(vw - 76, toyBox.x));
+      toyTramp.x = Math.max(12, Math.min(vw - 84, toyTramp.x));
+      toyBed.x = Math.max(12, Math.min(vw - 84, toyBed.x));
     }
     if (vh && vh >= catHeight + 14) {
       const floorY = getFloorY();
       if (!state.allowFreeDrag) {
         toyBox.y = vh - 38;
+        toyTramp.y = vh - 30;
+        toyBed.y = vh - 30;
       } else {
         toyBox.y = Math.max(16, Math.min(vh - 38, toyBox.y));
+        toyTramp.y = Math.max(24, Math.min(vh - 30, toyTramp.y));
+        toyBed.y = Math.max(16, Math.min(vh - 30, toyBed.y));
       }
       toyMouse.y = vh - 23;
-      if (!state.allowFreeDrag && !state.allowFreeRoam && !isCatnipActive() && !(kitten.isDragging && kitten.dragMoved)) {
+      const inFlip = Date.now() < toyTramp.flipUntil;
+      if (
+        !state.allowFreeDrag &&
+        !state.allowFreeRoam &&
+        !isCatnipActive() &&
+        !inFlip &&
+        !(kitten.isDragging && kitten.dragMoved)
+      ) {
         state.y = floorY;
       } else {
         state.y = Math.max(12, Math.min(floorY, state.y));
@@ -1228,6 +1290,8 @@
     if (Math.abs(nextX - state.x) > 4 || Math.abs(nextY - state.y) > 4) {
       state.dragMoved = true;
       toyBox.catInside = false;
+      toyBed.catSleepingInBed = false;
+      toyTramp.flipUntil = 0;
       state.mode = 'held';
       updateToysUI();
     }
@@ -1315,6 +1379,7 @@
       'equippedAccessory',
       'catScale',
       'visible',
+      'hiddenDomains',
       'allowFreeDrag',
       'allowFreeRoam',
       'yarnMode',
@@ -1337,6 +1402,7 @@
       if (data.equippedAccessory) state.equippedAccessory = data.equippedAccessory;
       if (data.catScale) applyCatScale(data.catScale);
       if (typeof data.visible === 'boolean') state.visible = data.visible;
+      state.hiddenDomains = Array.isArray(data.hiddenDomains) ? data.hiddenDomains : [];
       state.allowFreeDrag = Boolean(data.allowFreeDrag);
       state.allowFreeRoam = Boolean(data.allowFreeRoam);
       state.yarnMode = Boolean(data.yarnMode);
@@ -1396,6 +1462,11 @@
       updateVisibility();
       updateToysUI();
     }
+    if (changes.hiddenDomains) {
+      state.hiddenDomains = Array.isArray(changes.hiddenDomains.newValue) ? changes.hiddenDomains.newValue : [];
+      updateVisibility();
+      updateToysUI();
+    }
     if (changes.allowFreeDrag) {
       state.allowFreeDrag = Boolean(changes.allowFreeDrag.newValue);
       clampPosition();
@@ -1433,14 +1504,36 @@
     if (changes.activeToy) {
       state.activeToy = changes.activeToy.newValue || 'none';
       toyBox.catInside = false;
-      if (state.activeToy === 'laser' && document.visibilityState === 'visible') {
-        showBubble(tr('phraseLaser'), 2600);
-      } else if (state.activeToy === 'mouse' && document.visibilityState === 'visible') {
-        showBubble(tr('phraseMouse'), 2600);
+      toyBed.catSleepingInBed = false;
+      toyTramp.flipUntil = 0;
+      canvas.style.transform = 'rotate(0deg)';
+      state.targetX = null;
+      state.targetY = null;
+
+      const vw = window.innerWidth || 900;
+      const vh = window.innerHeight || 700;
+
+      if (state.activeToy === 'laser') {
+        if (document.visibilityState === 'visible') showBubble(tr('phraseLaser'), 2600);
+      } else if (state.activeToy === 'mouse') {
+        toyMouse.x = Math.max(40, Math.min(vw - 90, Math.floor(vw * 0.35)));
+        toyMouse.y = vh - 23;
+        if (document.visibilityState === 'visible') showBubble(tr('phraseMouse'), 2600);
       } else if (state.activeToy === 'box') {
-        toyBox.x = Math.max(40, Math.min((window.innerWidth || 900) - 120, Math.floor((window.innerWidth || 900) * 0.35)));
-        toyBox.y = (window.innerHeight || 700) - 38;
+        toyBox.x = Math.max(40, Math.min(vw - 120, Math.floor(vw * 0.35)));
+        toyBox.y = vh - 38;
+        walkToProp(toyBox.x + 32, toyBox.y + 36, 9000);
         if (document.visibilityState === 'visible') showBubble(tr('phraseBox'), 2600);
+      } else if (state.activeToy === 'trampoline') {
+        toyTramp.x = Math.max(40, Math.min(vw - 120, Math.floor(vw * 0.42)));
+        toyTramp.y = vh - 30;
+        walkToProp(toyTramp.x + 36, toyTramp.y + 28, 9000);
+        if (document.visibilityState === 'visible') showBubble(tr('phraseTrampoline'), 2600);
+      } else if (state.activeToy === 'bed') {
+        toyBed.x = Math.max(40, Math.min(vw - 120, Math.floor(vw * 0.28)));
+        toyBed.y = vh - 30;
+        walkToProp(toyBed.x + 36, toyBed.y + 28, 9000);
+        if (document.visibilityState === 'visible') showBubble(tr('phraseBed'), 2600);
       } else if (state.activeToy === 'none') {
         state.mode = state.pomodoroPhase === 'focus' ? 'focus' : 'sit';
         state.modeUntil = Date.now() + 2000;
@@ -1563,7 +1656,7 @@
     const dt = Math.min(0.05, (now - state.lastTickTime) / 1000);
     state.lastTickTime = now;
 
-    if (state.visible && !document.fullscreenElement) {
+    if (isEffectivelyVisible()) {
       const wallNow = Date.now();
       const zoomies = isCatnipActive();
 
@@ -1597,11 +1690,9 @@
         boxEl.style.transform = `translate3d(${Math.round(toyBox.x)}px, ${Math.round(toyBox.y)}px, 0)`;
       }
       if (state.activeToy === 'trampoline') {
-        toyTramp.y = (window.innerHeight || 700) - 30;
         trampEl.style.transform = `translate3d(${Math.round(toyTramp.x)}px, ${Math.round(toyTramp.y)}px, 0)`;
       }
       if (state.activeToy === 'bed') {
-        toyBed.y = (window.innerHeight || 700) - 30;
         bedEl.style.transform = `translate3d(${Math.round(toyBed.x)}px, ${Math.round(toyBed.y)}px, 0)`;
       }
 
@@ -1609,12 +1700,13 @@
         const fp = (wallNow - toyTramp.flipStart) / (toyTramp.flipUntil - toyTramp.flipStart);
         const arc = Math.sin(fp * Math.PI);
         const jumpHeight = Math.min(260, (window.innerHeight || 700) * 0.35);
-        state.y = getFloorY() - arc * jumpHeight;
+        state.y = Math.max(12, toyTramp.flipBaseY - arc * jumpHeight);
         canvas.style.transform = `rotate(${Math.round(fp * 360)}deg)`;
         state.mode = 'happy';
         renderTrampoline(trampCanvas, fp < 0.2 ? 1 : 0);
       } else if (toyTramp.flipUntil > 0 && wallNow >= toyTramp.flipUntil) {
         toyTramp.flipUntil = 0;
+        state.y = toyTramp.flipBaseY;
         canvas.style.transform = 'rotate(0deg)';
         renderTrampoline(trampCanvas, 0);
       }
@@ -1655,10 +1747,12 @@
             state.mode = 'walk';
           }
         } else if (state.yarnMode && state.mode !== 'happy' && state.mode !== 'eat') {
-          const desiredX = yarn.ballX - catWidth / 2;
-          const desiredY = state.allowFreeRoam ? (yarn.ballY - catHeight / 2) : state.y;
-          const dx = desiredX - state.x;
-          const dy = desiredY - state.y;
+          const desired = getClampedWalkTarget(
+            yarn.ballX - catWidth / 2,
+            state.allowFreeRoam ? (yarn.ballY - catHeight / 2) : state.y
+          );
+          const dx = desired.x - state.x;
+          const dy = desired.y - state.y;
           const moveDist = Math.hypot(dx, dy);
           const ballDist = Math.hypot(yarn.ballX - catCenterX, yarn.ballY - catCenterY);
 
@@ -1672,17 +1766,19 @@
             const chaseSpeed = 145;
             state.x += (dx / moveDist) * Math.min(moveDist, chaseSpeed * dt);
             state.y += (dy / moveDist) * Math.min(moveDist, chaseSpeed * dt);
-            if (Math.abs(dx) > 2) state.facingLeft = dx < 0;
+            if (Math.abs(dx) > 4) state.facingLeft = dx < 0;
             state.mode = 'walk';
           } else {
             state.facingLeft = yarn.ballX < catCenterX;
             state.mode = 'idle';
           }
         } else if (state.activeToy === 'laser' && state.mode !== 'happy' && state.mode !== 'eat') {
-          const desiredX = cursor.x - catWidth / 2;
-          const desiredY = state.allowFreeRoam ? (cursor.y - catHeight / 2) : state.y;
-          const dx = desiredX - state.x;
-          const dy = desiredY - state.y;
+          const desired = getClampedWalkTarget(
+            cursor.x - catWidth / 2,
+            state.allowFreeRoam ? (cursor.y - catHeight / 2) : state.y
+          );
+          const dx = desired.x - state.x;
+          const dy = desired.y - state.y;
           const moveDist = Math.hypot(dx, dy);
           const dotDist = Math.hypot(cursor.x - catCenterX, cursor.y - catCenterY);
 
@@ -1694,16 +1790,17 @@
             const chaseSpeed = 175;
             state.x += (dx / moveDist) * Math.min(moveDist, chaseSpeed * dt);
             state.y += (dy / moveDist) * Math.min(moveDist, chaseSpeed * dt);
-            if (Math.abs(dx) > 2) state.facingLeft = dx < 0;
+            if (Math.abs(dx) > 4) state.facingLeft = dx < 0;
             state.mode = 'walk';
           } else {
             state.facingLeft = cursor.x < catCenterX;
             state.mode = 'idle';
           }
         } else if (state.activeToy === 'mouse' && state.mode !== 'happy' && state.mode !== 'eat') {
-          const desiredX = toyMouse.x + 18 - catWidth / 2;
-          const dx = desiredX - state.x;
-          if (Math.abs(dx) < Math.max(32, catWidth * 0.5) && wallNow - toyMouse.lastCatchTs > 1800) {
+          const desired = getClampedWalkTarget(toyMouse.x + 18 - catWidth / 2, state.y);
+          const dx = desired.x - state.x;
+          const mouseDist = Math.abs((toyMouse.x + 18) - catCenterX);
+          if (mouseDist < Math.max(34, catWidth * 0.5) && wallNow - toyMouse.lastCatchTs > 1800) {
             toyMouse.lastCatchTs = wallNow;
             toyMouse.vx = (dx >= 0 ? 1 : -1) * (135 + Math.random() * 40);
             triggerHappy(tr('phraseMouse'));
@@ -1713,7 +1810,13 @@
             state.x += Math.sign(dx) * Math.min(Math.abs(dx), chaseSpeed * dt);
             state.facingLeft = dx < 0;
             state.mode = 'walk';
+          } else {
+            state.mode = 'idle';
           }
+        } else if (state.mode === 'walk' && state.targetX === null) {
+          // Guard: never run in place if walk has no target!
+          state.mode = 'sit';
+          state.modeUntil = wallNow + 1500;
         } else if (
           state.mode === 'walk' &&
           state.targetX !== null &&
@@ -1726,19 +1829,36 @@
           const dy = targetY - state.y;
           const dist = Math.hypot(dx, dy);
 
-          if (dist <= speed * dt) {
-            state.x = state.targetX;
-            state.y = targetY;
+          if (dist <= Math.max(4, speed * dt) || wallNow >= state.modeUntil) {
+            if (dist <= Math.max(4, speed * dt)) {
+              state.x = state.targetX;
+              state.y = targetY;
+            }
             state.targetX = null;
             state.targetY = null;
 
-            // If walking to the cardboard box, hop inside!
-            if (state.activeToy === 'box' && Math.abs(state.x - toyBox.x) < 20) {
+            const boxCenterX = toyBox.x + 32;
+            const boxBottomY = toyBox.y + 36;
+            const trampCenterX = toyTramp.x + 36;
+            const trampBottomY = toyTramp.y + 28;
+            const bedCenterX = toyBed.x + 36;
+            const bedBottomY = toyBed.y + 28;
+            const catFeetX = state.x + catWidth / 2;
+            const catFeetY = state.y + catHeight;
+
+            if (state.activeToy === 'box' && Math.hypot(catFeetX - boxCenterX, catFeetY - boxBottomY) < 42) {
+              const snap = getClampedWalkTarget(boxCenterX - catWidth / 2, boxBottomY - catHeight);
+              state.x = snap.x;
+              state.y = snap.y;
               toyBox.catInside = true;
               state.mode = 'box';
               state.modeUntil = wallNow + 7000;
               updateToysUI();
-            } else if (state.activeToy === 'trampoline' && Math.abs((state.x + catWidth / 2) - (toyTramp.x + 36)) < 26) {
+            } else if (state.activeToy === 'trampoline' && Math.hypot(catFeetX - trampCenterX, catFeetY - trampBottomY) < 42) {
+              const snap = getClampedWalkTarget(trampCenterX - catWidth / 2, trampBottomY - catHeight);
+              state.x = snap.x;
+              state.y = snap.y;
+              toyTramp.flipBaseY = snap.y;
               toyTramp.flipStart = wallNow;
               toyTramp.flipUntil = wallNow + 1050;
               state.mode = 'happy';
@@ -1746,7 +1866,10 @@
               spawnHearts(3);
               showBubble(tr('phraseTrampoline'), 2600);
               chrome.runtime.sendMessage({ type: 'YARN_CATCH' }).catch(() => {});
-            } else if (state.activeToy === 'bed' && Math.abs((state.x + catWidth / 2) - (toyBed.x + 36)) < 26) {
+            } else if (state.activeToy === 'bed' && Math.hypot(catFeetX - bedCenterX, catFeetY - bedBottomY) < 42) {
+              const snap = getClampedWalkTarget(bedCenterX - catWidth / 2, bedBottomY - catHeight);
+              state.x = snap.x;
+              state.y = snap.y;
               toyBed.catSleepingInBed = true;
               state.mode = 'sleep';
               state.modeUntil = wallNow + 12000;

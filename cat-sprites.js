@@ -345,9 +345,9 @@
   // Approximate head top-center (x, y) in 24x20 grid for each pose & frame (facing RIGHT)
   const HEAD_ANCHORS = {
     idle:  [[15, 4], [15, 4]],
-    walk:  [[15, 4], [15, 3], [15, 4], [15, 3]],
+    walk:  [[15, 4], [15, 4], [15, 4], [15, 4]],
     sit:   [[11, 5], [11, 5]],
-    happy: [[11, 3], [11, 5]],
+    happy: [[11, 4], [11, 5]],
     pet:   [[11, 5], [11, 6]],
     focus: [[11, 5], [11, 5]],
     eat:   [[11, 5], [11, 6]],

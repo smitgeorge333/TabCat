@@ -75,6 +75,7 @@
 
   // Settings
   const visibleToggle = document.getElementById('visibleToggle');
+  const hideSiteBtn = document.getElementById('hideSiteBtn');
   const freeDragToggle = document.getElementById('freeDragToggle');
   const freeRoamToggle = document.getElementById('freeRoamToggle');
   const advancedToggleBtn = document.getElementById('advancedToggleBtn');
@@ -180,6 +181,7 @@
   let currentLevel = 1;
 
   let sleepyDomains = [];
+  let hiddenDomains = [];
   let activeTabDomain = '';
   let isActiveSiteSleepy = false;
   let sleepySinceTs = null;
@@ -979,6 +981,7 @@
   function renderCurrentSiteRow() {
     if (!activeTabDomain) {
       currentSiteRow.classList.add('hidden');
+      if (hideSiteBtn) hideSiteBtn.classList.add('hidden');
       return;
     }
     currentSiteRow.classList.remove('hidden');
@@ -986,6 +989,14 @@
     currentSiteLabel.textContent = activeTabDomain;
     toggleCurrentSiteBtn.textContent = inList ? tr('removeFromSleepy') : tr('addToSleepy');
     toggleCurrentSiteBtn.classList.toggle('remove', inList);
+
+    if (hideSiteBtn) {
+      hideSiteBtn.classList.remove('hidden');
+      const isHiddenHere = isDomainInList(activeTabDomain, hiddenDomains);
+      hideSiteBtn.textContent = isHiddenHere
+        ? tr('showOnSite', { domain: activeTabDomain })
+        : tr('hideOnSite', { domain: activeTabDomain });
+    }
   }
 
   function renderSleepyChips() {
@@ -1120,7 +1131,7 @@
       'hasKitten', 'kittenEnabled',
       'catScale',
       'yarnMode',
-      'visible', 'allowFreeDrag', 'allowFreeRoam',
+      'visible', 'hiddenDomains', 'allowFreeDrag', 'allowFreeRoam',
       'tabsClosed', 'fish', 'xp', 'level', 'stats',
       'dailyQuests', 'achievements', 'shopPurchasesCount',
       'sleepyDomains', 'sleepyLimitMinutes', 'isActiveSiteSleepy', 'sleepySinceTs',
@@ -1154,6 +1165,7 @@
       applyBackgroundClass(equippedBackground);
 
       visibleToggle.checked = data.visible !== false;
+      hiddenDomains = Array.isArray(data.hiddenDomains) ? data.hiddenDomains : [];
       freeDragToggle.checked = Boolean(data.allowFreeDrag);
       freeRoamToggle.checked = Boolean(data.allowFreeRoam);
       tabsClosedEl.textContent = String(data.tabsClosed || 0);
@@ -1237,6 +1249,10 @@
     if (changes.catScale) updateScaleUI(changes.catScale.newValue);
     if (changes.yarnMode) { yarnMode = Boolean(changes.yarnMode.newValue); updateYarnButtonUI(); }
     if (changes.visible) visibleToggle.checked = Boolean(changes.visible.newValue);
+    if (changes.hiddenDomains) {
+      hiddenDomains = Array.isArray(changes.hiddenDomains.newValue) ? changes.hiddenDomains.newValue : [];
+      renderCurrentSiteRow();
+    }
     if (changes.allowFreeDrag) freeDragToggle.checked = Boolean(changes.allowFreeDrag.newValue);
     if (changes.allowFreeRoam) freeRoamToggle.checked = Boolean(changes.allowFreeRoam.newValue);
     if (changes.sleepyDomains) { sleepyDomains = changes.sleepyDomains.newValue || []; renderSleepyChips(); renderCurrentSiteRow(); }
@@ -1326,6 +1342,21 @@
     chrome.storage.local.set({ visible: visibleToggle.checked });
     moodText.textContent = visibleToggle.checked ? tr('moodVisibleOn') : tr('moodVisibleOff');
   });
+
+  if (hideSiteBtn) {
+    hideSiteBtn.addEventListener('click', () => {
+      if (!activeTabDomain) return;
+      const isHiddenHere = isDomainInList(activeTabDomain, hiddenDomains);
+      if (isHiddenHere) {
+        const matched = hiddenDomains.find((d) => activeTabDomain === d || activeTabDomain.endsWith('.' + d));
+        hiddenDomains = hiddenDomains.filter((d) => d !== (matched || activeTabDomain));
+      } else {
+        hiddenDomains = [activeTabDomain, ...hiddenDomains];
+      }
+      chrome.storage.local.set({ hiddenDomains });
+      renderCurrentSiteRow();
+    });
+  }
 
   freeDragToggle.addEventListener('change', () => {
     chrome.storage.local.set({ allowFreeDrag: freeDragToggle.checked });
