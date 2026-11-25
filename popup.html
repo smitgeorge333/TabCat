@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TabCat</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <!-- Left-edge hover dock navigation -->
+  <nav class="left-dock" aria-label="Navigation">
+    <div class="dock-handle" title="Наведи сюда для навигации">›</div>
+    <div class="dock-items">
+      <button class="dock-btn active" data-tab="menu" type="button">
+        <span class="dock-icon">🏠</span>
+        <span class="dock-label" data-i18n="navMenu">Меню</span>
+      </button>
+      <button class="dock-btn" data-tab="shop" type="button">
+        <span class="dock-icon">🛒</span>
+        <span class="dock-label" data-i18n="navShop">Магазин</span>
+      </button>
+      <button class="dock-btn" data-tab="wardrobe" type="button">
+        <span class="dock-icon">👕</span>
+        <span class="dock-label" data-i18n="navWardrobe">Гардероб</span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="card">
+    <!-- Persistent Header -->
+    <header class="header">
+      <div>
+        <div class="title-row">
+          <h1 class="title">TabCat</h1>
+          <span id="levelBadge" class="level-badge">Ур. 1</span>
+        </div>
+        <div class="xp-bar-wrap" title="Опыт котика">
+          <div id="xpBarFill" class="xp-bar-fill" style="width: 0%"></div>
+        </div>
+      </div>
+      <div class="stats-pills">
+        <div class="badge fish-badge" id="fishBadge">
+          <span>🐟</span>
+          <span id="fishCount">0</span>
+        </div>
+        <div class="badge" id="tabsBadge">
+          <span>✨</span>
+          <span id="tabsClosedCount">0</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Delivery Cart Banner (animates when returning from Shop with a new item!) -->
+    <div id="deliveryStage" class="delivery-stage hidden">
+      <div id="deliveryCart" class="pixel-cart delivery-cart">
+        <span id="deliveryItemBadge" class="cart-item-pop"></span>
+        <canvas class="cart-canvas" width="44" height="32"></canvas>
+      </div>
+      <div id="deliveryText" class="delivery-text"></div>
+    </div>
+
+    <!-- ==================== VIEW 1: MENU ==================== -->
+    <main id="view-menu" class="view active">
+      <section class="stage">
+        <div class="stage-status" id="sleepStatusBadge">Бодрый 🐾</div>
+        <canvas id="previewCanvas" width="96" height="80"></canvas>
+        <div id="previewMood" class="mood-text">Мур-мур! Я рядом ♥</div>
+
+        <div class="needs-grid">
+          <div class="need-item">
+            <div class="need-top">
+              <span data-i18n="needHunger">🐟 Сытость</span>
+              <span id="hungerVal">80%</span>
+            </div>
+            <div class="need-bar"><div id="hungerFill" class="need-fill fill-hunger" style="width:80%"></div></div>
+          </div>
+          <div class="need-item">
+            <div class="need-top">
+              <span data-i18n="needPleasure">♥ Удовольствие</span>
+              <span id="pleasureVal">80%</span>
+            </div>
+            <div class="need-bar"><div id="pleasureFill" class="need-fill fill-pleasure" style="width:80%"></div></div>
+          </div>
+          <div class="need-item">
+            <div class="need-top">
+              <span data-i18n="needEnergy">⚡ Бодрость</span>
+              <span id="energyVal">90%</span>
+            </div>
+            <div class="need-bar"><div id="energyFill" class="need-fill fill-energy" style="width:90%"></div></div>
+          </div>
+        </div>
+
+        <div class="action-row">
+          <button id="feedBtn" class="feed-btn" type="button" data-i18n="btnFeed">Покормить 🐟</button>
+          <button id="petBtn" class="pet-btn" type="button" data-i18n="btnPet">Погладить ♥</button>
+          <button id="yarnBtn" class="yarn-btn" type="button" data-i18n="btnYarn">Клубок 🧶</button>
+        </div>
+      </section>
+
+      <section class="section pomo-box">
+        <div class="pomo-header">
+          <div class="section-label" style="margin-bottom:0;" data-i18n="pomoTitle">Pomodoro-фокус 🎯</div>
+          <span id="pomoPhaseLabel" class="pomo-phase">Готов к фокусу</span>
+        </div>
+
+        <div class="pomo-main">
+          <div id="pomoTimer" class="pomo-timer">25:00</div>
+          <button id="pomoActionBtn" class="pomo-btn" type="button">Начать фокус</button>
+        </div>
+
+        <div class="pomo-presets" id="pomoPresets">
+          <button class="preset-btn active" data-focus="25" data-break="5" type="button">25 / 5</button>
+          <button class="preset-btn" data-focus="15" data-break="3" type="button">15 / 3</button>
+          <button class="preset-btn" data-focus="1" data-break="1" type="button" id="pomoTestPreset">1 / 1 (тест)</button>
+          <span class="pomo-reward" data-i18n="pomoReward">+5 🐟 за сессию</span>
+        </div>
+      </section>
+
+      <section class="section sleepy-box">
+        <div class="sleepy-header">
+          <div class="section-label" style="margin-bottom:0;" data-i18n="sleepyTitle">Сонные сайты 💤</div>
+          <div class="limit-wrap">
+            <span data-i18n="sleepyAfter">Сон через:</span>
+            <select id="sleepyLimitSelect" aria-label="Sleep limit">
+              <option value="1">1</option>
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="15">15</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="currentSiteRow" class="current-site-row hidden">
+          <span id="currentSiteLabel" class="current-site-domain"></span>
+          <button id="toggleCurrentSiteBtn" class="mini-btn" type="button">+ В сонные</button>
+        </div>
+
+        <form id="addDomainForm" class="add-domain-form">
+          <input id="domainInput" type="text" placeholder="например: google.com" autocomplete="off" />
+          <button type="submit" class="mini-btn" data-i18n="btnAdd">Добавить</button>
+        </form>
+        <div id="domainFeedback" class="domain-feedback"></div>
+
+        <div id="sleepyChips" class="chips"></div>
+      </section>
+
+      <section class="controls">
+        <div class="section-label" style="margin-bottom: 2px;" data-i18n="settingsTitle">Настройки на экране</div>
+        <label class="toggle-row">
+          <span data-i18n="toggleVisible">Показывать котика на страницах</span>
+          <input type="checkbox" id="visibleToggle" checked />
+          <span class="toggle-slider"></span>
+        </label>
+        <label class="toggle-row">
+          <span data-i18n="toggleFreeDrag">Перетаскивать по всему экрану</span>
+          <input type="checkbox" id="freeDragToggle" />
+          <span class="toggle-slider"></span>
+        </label>
+        <label class="toggle-row">
+          <span data-i18n="toggleFreeRoam">Котик гуляет по всему экрану</span>
+          <input type="checkbox" id="freeRoamToggle" />
+          <span class="toggle-slider"></span>
+        </label>
+
+        <button id="advancedToggleBtn" class="advanced-toggle-btn" type="button">
+          <span data-i18n="btnAdvanced">⚙️ Расширенные настройки</span>
+          <span id="advancedArrow">▾</span>
+        </button>
+
+        <div id="advancedPanel" class="advanced-panel hidden">
+          <div class="advanced-row">
+            <div class="advanced-label">
+              <span data-i18n="catSizeLabel">Размер котика</span>
+              <span id="scaleValueLabel" class="scale-value">Средний (3×)</span>
+            </div>
+            <div class="scale-buttons" id="scaleButtons">
+              <button class="scale-btn" data-scale="2" type="button">S</button>
+              <button class="scale-btn active" data-scale="3" type="button">M</button>
+              <button class="scale-btn" data-scale="4" type="button">L</button>
+              <button class="scale-btn" data-scale="5" type="button">XL</button>
+            </div>
+          </div>
+
+          <div class="advanced-row">
+            <div class="advanced-label">
+              <span data-i18n="langLabel">Язык / Language</span>
+            </div>
+            <div class="lang-buttons" id="langButtons">
+              <button class="lang-btn active" data-lang="ru" type="button">🇷🇺 RU</button>
+              <button class="lang-btn" data-lang="en" type="button">🇬🇧 EN</button>
+              <button class="lang-btn" data-lang="zh" type="button">🇨🇳 中文</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- ==================== VIEW 2: PET SHOP ==================== -->
+    <main id="view-shop" class="view">
+      <div class="view-hero">
+        <h2 class="view-title" data-i18n="shopTitle">ЗооМагазин 🐾</h2>
+        <p class="view-subtitle" data-i18n="shopSubtitle">Обновки и уют за заработанные рыбки</p>
+      </div>
+
+      <div class="shop-subtabs" id="shopSubtabs">
+        <button class="subtab-btn active" data-subtab="clothes" type="button" data-i18n="shopTabClothes">🎩 Одежда</button>
+        <button class="subtab-btn" data-subtab="treats" type="button" data-i18n="shopTabTreats">🍣 Еда</button>
+        <button class="subtab-btn" data-subtab="toys" type="button" data-i18n="shopTabToys">🧸 Игрушки</button>
+        <button class="subtab-btn" data-subtab="world" type="button" data-i18n="shopTabWorld">🏡 Мир</button>
+      </div>
+
+      <div id="subtab-clothes" class="shop-subpanel active">
+        <section class="section shop-box">
+          <div class="section-label" data-i18n="shopHats">🎩 Шапочки</div>
+          <div id="shopHatGrid" class="shop-grid"></div>
+        </section>
+        <section class="section shop-box">
+          <div class="section-label" data-i18n="shopSweaters">🧥 Кофточки</div>
+          <div id="shopSweaterGrid" class="shop-grid"></div>
+        </section>
+        <section class="section shop-box">
+          <div class="section-label" data-i18n="shopAccessories">🕶️ Очки и шарфики</div>
+          <div id="shopAccGrid" class="shop-grid"></div>
+        </section>
+      </div>
+
+      <div id="subtab-treats" class="shop-subpanel">
+        <section class="section shop-box">
+          <div class="section-label" data-i18n="shopTreats">🍣 Вкусняшки и еда</div>
+          <div id="shopTreatGrid" class="shop-grid shop-grid-3"></div>
+        </section>
+      </div>
+
+      <div id="subtab-toys" class="shop-subpanel">
+        <section class="section shop-box">
+          <div class="section-label" data-i18n="shopToys">🧸 Игрушки</div>
+          <div id="shopToyGrid" class="shop-grid shop-grid-3"></div>
+        </section>
+      </div>
+
+      <div id="subtab-world" class="shop-subpanel">
+        <section class="section shop-box">
+          <div class="section-label" data-i18n="shopBgs">🏡 Фоны домика</div>
+          <div id="shopBgGrid" class="shop-grid"></div>
+        </section>
+        <section class="section shop-box">
+          <div class="section-label" data-i18n="shopSkins">✨ Редкие скины и друг</div>
+          <div id="shopSkinGrid" class="shop-grid"></div>
+        </section>
+      </div>
+
+      <div id="shopNotice" class="shop-notice"></div>
+
+      <!-- Pixel Shopping Cart Track -->
+      <section class="cart-track" id="shopCartTrack">
+        <div id="shopCartStatus" class="cart-status-label" data-i18n="shopCartReady">Тележка ждёт покупок!</div>
+        <div class="cart-floor"></div>
+        <div id="shopCart" class="pixel-cart shop-cart">
+          <span id="shopCartDust" class="cart-dust">💨</span>
+          <span id="shopCartItem" class="cart-cargo"></span>
+          <canvas class="cart-canvas" width="44" height="32"></canvas>
+        </div>
+        <span id="flyingItem" class="flying-item"></span>
+      </section>
+    </main>
+
+    <!-- ==================== VIEW 3: WARDROBE ==================== -->
+    <main id="view-wardrobe" class="view">
+      <div class="view-hero">
+        <h2 class="view-title" data-i18n="wardrobeTitle">Гардероб 👕</h2>
+        <p class="view-subtitle" data-i18n="wardrobeSubtitle">Выбирай окрас и примеряй купленные вещи</p>
+      </div>
+
+      <section class="stage wardrobe-stage" id="wardrobeStage">
+        <canvas id="wardrobeCanvas" width="96" height="80"></canvas>
+        <div id="wardrobeMood" class="mood-text"></div>
+      </section>
+
+      <section class="section">
+        <div class="section-label" data-i18n="coatColorLabel">Окрас котика</div>
+        <div class="color-grid" id="colorGrid">
+          <button class="color-btn" data-color="ginger" type="button">
+            <span class="swatch swatch-ginger"></span>
+            <span class="color-name" data-i18n="colorGinger">Рыжий</span>
+            <span class="color-hint" data-i18n="colorGingerHint">Универсальный</span>
+          </button>
+          <button class="color-btn" data-color="black" type="button">
+            <span class="swatch swatch-black"></span>
+            <span class="color-name" data-i18n="colorBlack">Чёрный</span>
+            <span class="color-hint" data-i18n="colorBlackHint">Для светлой темы</span>
+          </button>
+          <button class="color-btn" data-color="white" type="button">
+            <span class="swatch swatch-white"></span>
+            <span class="color-name" data-i18n="colorWhite">Белый</span>
+            <span class="color-hint" data-i18n="colorWhiteHint">Для тёмной темы</span>
+          </button>
+        </div>
+        <div id="wardrobeRareSkinGrid" class="shop-grid" style="margin-top:6px;"></div>
+      </section>
+
+      <section class="section shop-box">
+        <div class="section-label" data-i18n="myHatsLabel">Мои шапочки</div>
+        <div id="wardrobeHatGrid" class="shop-grid"></div>
+      </section>
+
+      <section class="section shop-box">
+        <div class="section-label" data-i18n="mySweatersLabel">Мои кофточки</div>
+        <div id="wardrobeSweaterGrid" class="shop-grid"></div>
+      </section>
+
+      <section class="section shop-box">
+        <div class="section-label" data-i18n="myAccessoriesLabel">Очки и шарфики</div>
+        <div id="wardrobeAccGrid" class="shop-grid"></div>
+      </section>
+
+      <section class="section shop-box">
+        <div class="section-label" data-i18n="myToysLabel">Игрушки и друг</div>
+        <div id="wardrobeToyGrid" class="shop-grid"></div>
+      </section>
+
+      <section class="section shop-box">
+        <div class="section-label" data-i18n="myBgsLabel">Фон домика</div>
+        <div id="wardrobeBgGrid" class="shop-grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="i18n.js"></script>
+  <script src="cat-sprites.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

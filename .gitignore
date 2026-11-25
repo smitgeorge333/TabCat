@@ -1,0 +1,12 @@
+# OS & Editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+.vscode/
+.idea/
+
+# Packaged release archives
+*.zip
+*.crx
+*.pem

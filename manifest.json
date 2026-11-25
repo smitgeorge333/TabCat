@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "TabCat — Browser Pet",
+  "version": "0.7.1",
+  "description": "A cute pixel-art cat that walks on your browser tabs, celebrates closed tabs, naps on distracting sites, and helps you focus with Pomodoro.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "alarms",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "TabCat — Your Browser Cat",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["i18n.js", "cat-sprites.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
