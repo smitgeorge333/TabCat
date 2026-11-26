@@ -95,10 +95,23 @@
           </div>
         </div>
 
-        <div class="action-row">
+        <div class="action-row action-row-4">
           <button id="feedBtn" class="feed-btn" type="button" data-i18n="btnFeed">Покормить 🐟</button>
           <button id="petBtn" class="pet-btn" type="button" data-i18n="btnPet">Погладить ♥</button>
           <button id="yarnBtn" class="yarn-btn" type="button" data-i18n="btnYarn">Клубок 🧶</button>
+          <button id="minigameBtn" class="game-btn" type="button" data-i18n="btnMinigame">🎮 Игра</button>
+        </div>
+
+        <div id="minigameBox" class="minigame-box hidden">
+          <div class="minigame-head">
+            <span data-i18n="minigameTitle">Лови рыбки! 🐟</span>
+            <span id="minigameHud">15.0s • 🐟 0</span>
+          </div>
+          <canvas id="minigameCanvas" width="296" height="150"></canvas>
+          <div class="minigame-foot">
+            <span id="minigameHint" class="minigame-hint" data-i18n="minigameHint">Двигай мышкой или ← →. Лови 🐟, избегай 🥒!</span>
+            <button id="minigameStartBtn" class="mini-btn" type="button" data-i18n="minigameStart">Играть (15с)</button>
+          </div>
         </div>
       </section>
 
@@ -197,6 +210,15 @@
               <button class="lang-btn" data-lang="zh" type="button">🇨🇳 中文</button>
             </div>
           </div>
+
+          <div class="advanced-row">
+            <div class="save-buttons">
+              <button id="exportSaveBtn" class="mini-btn" type="button" data-i18n="exportSave">💾 Экспорт сейва</button>
+              <button id="importSaveBtn" class="mini-btn" type="button" data-i18n="importSave">📂 Импорт сейва</button>
+              <input id="importSaveInput" type="file" accept=".json,application/json" style="display:none;" />
+            </div>
+            <div id="saveFeedback" class="domain-feedback"></div>
+          </div>
         </div>
       </section>
     </main>
@@ -207,6 +229,16 @@
         <h2 class="view-title" data-i18n="shopTitle">ЗооМагазин 🐾</h2>
         <p class="view-subtitle" data-i18n="shopSubtitle">Обновки и уют за заработанные рыбки</p>
       </div>
+
+      <section id="releaseGiftCard" class="release-gift-card">
+        <div class="release-gift-top">
+          <span class="release-gift-badge" data-i18n="releaseGiftBadge">🎁 ПОДАРОК К РЕЛИЗУ v1.0</span>
+          <span class="release-gift-free">0 🐟</span>
+        </div>
+        <div class="release-gift-title" data-i18n="releaseGiftTitle">Праздничный набор</div>
+        <div class="release-gift-desc" data-i18n="releaseGiftDesc">Колпак 🎉 + Праздничный свитер 🎊 + Звёздные очки ⭐</div>
+        <button id="claimReleaseGiftBtn" class="release-gift-btn" type="button" data-i18n="releaseGiftBtn">Забрать бесплатно 🎁</button>
+      </section>
 
       <div class="shop-subtabs" id="shopSubtabs">
         <button class="subtab-btn active" data-subtab="clothes" type="button" data-i18n="shopTabClothes">🎩 Одежда</button>
@@ -278,6 +310,7 @@
       </div>
 
       <section class="stage wardrobe-stage" id="wardrobeStage">
+        <button id="snapshotCatBtn" class="snapshot-btn" type="button" data-i18n="btnSnapshotCat">📸 Сфоткать</button>
         <canvas id="wardrobeCanvas" width="96" height="80"></canvas>
         <div id="wardrobeMood" class="mood-text"></div>
       </section>
@@ -344,6 +377,15 @@
         <h2 class="view-title" data-i18n="questsTitle">Квесты и Ачивки 🏆</h2>
         <p class="view-subtitle" data-i18n="questsSubtitle">Выполняй задания дня и открывай редкие награды</p>
       </div>
+
+      <section class="section shop-box streak-box">
+        <div class="streak-head">
+          <div class="section-label" style="margin-bottom:0;" data-i18n="streakTitle">🔥 Ежедневный стрик</div>
+          <span id="streakDayLabel" class="streak-day">День 0/7</span>
+        </div>
+        <div id="streakDots" class="streak-dots"></div>
+        <button id="claimStreakBtn" class="claim-btn" style="width:100%;padding:7px;" type="button"></button>
+      </section>
 
       <section class="section shop-box">
         <div class="section-label" data-i18n="dailyQuestsLabel">📅 Задания на сегодня</div>

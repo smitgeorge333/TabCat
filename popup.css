@@ -1025,9 +1025,240 @@ body {
   white-space: nowrap;
 }
 .claim-btn:hover { background: #246b33; }
+.action-row-4 {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+
+.game-btn {
+  appearance: none;
+  border: none;
+  border-radius: 9px;
+  padding: 7.5px 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  background: #734dff;
+  color: #ffffff;
+  white-space: nowrap;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.game-btn:hover { background: #5a36e0; }
+.game-btn.active { background: #471e0d; }
+
+.minigame-box {
+  width: 100%;
+  margin-top: 4px;
+  background: #fffdf9;
+  border: 1.5px solid #e0c8b2;
+  border-radius: 12px;
+  padding: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.minigame-box.hidden { display: none; }
+.minigame-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 800;
+  color: #471e0d;
+}
+#minigameCanvas {
+  width: 100%;
+  height: 148px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #dff4ff 0%, #fff6e8 100%);
+  border: 1px solid #e6d5c7;
+  display: block;
+  cursor: crosshair;
+}
+.minigame-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.minigame-hint {
+  font-size: 9.5px;
+  color: #7a665c;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.save-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+/* Daily Streak */
+.streak-box {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.streak-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.streak-day {
+  font-size: 11px;
+  font-weight: 800;
+  color: #d96f24;
+}
+.streak-dots {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.streak-pill {
+  text-align: center;
+  padding: 4px 2px;
+  border-radius: 7px;
+  background: #f8f1ea;
+  border: 1px solid #e6d5c7;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #8c7468;
+}
+.streak-pill.done {
+  background: #ffe7cf;
+  border-color: #eb8434;
+  color: #a64d14;
+}
+.streak-pill.big {
+  border-color: #f5a623;
+}
+.claim-btn:disabled {
+  background: #b9c5cc;
+  cursor: default;
+}
+
 .quest-status-done {
   font-size: 10.5px;
   font-weight: 800;
   color: #2e8540;
   white-space: nowrap;
+}
+
+/* ==================== v1.0 RELEASE GIFT BANNER ==================== */
+.release-gift-card {
+  background: linear-gradient(135deg, #fff4d6 0%, #ffe0ec 55%, #e4f3ff 100%);
+  border: 2px solid #f59e0b;
+  border-radius: 13px;
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  box-shadow: 0 3px 10px rgba(245, 158, 11, 0.18);
+}
+
+.release-gift-card.claimed {
+  background: linear-gradient(135deg, #f3faf5 0%, #eaf5ef 100%);
+  border-color: #86c79c;
+  box-shadow: none;
+}
+
+.release-gift-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.release-gift-badge {
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.4px;
+  color: #b45309;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid #fbbf24;
+}
+
+.release-gift-free {
+  font-size: 11px;
+  font-weight: 900;
+  color: #fff;
+  background: #ff4d8d;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+.release-gift-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #471e0d;
+}
+
+.release-gift-desc {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b4e42;
+}
+
+.release-gift-btn {
+  appearance: none;
+  border: none;
+  border-radius: 9px;
+  padding: 7px 10px;
+  margin-top: 2px;
+  background: linear-gradient(135deg, #ff5e8e, #f59e0b);
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.25);
+  transition: transform 0.12s ease, opacity 0.15s ease;
+}
+
+.release-gift-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.release-gift-btn:disabled {
+  background: #2e8540;
+  opacity: 0.9;
+  box-shadow: none;
+  cursor: default;
+}
+
+.ghost-glow {
+  opacity: 0.78;
+  filter: drop-shadow(0 0 8px rgba(130, 230, 255, 0.85));
+}
+
+.wardrobe-stage {
+  position: relative;
+}
+
+.snapshot-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  appearance: none;
+  border: 1.5px solid #d9c5b4;
+  background: rgba(255, 253, 249, 0.92);
+  color: #471e0d;
+  border-radius: 9px;
+  padding: 4px 8px;
+  font-size: 10.5px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+  transition: transform 0.12s ease, background 0.15s ease;
+}
+
+.snapshot-btn:hover {
+  background: #fff4e4;
+  border-color: #eb8434;
+  transform: translateY(-1px);
+}
+
+.wardrobe-stage.flash {
+  box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.65);
 }

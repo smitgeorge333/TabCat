@@ -5,7 +5,7 @@
   if (window.top !== window.self) return;
   if (!globalThis.TabCatSprites) return;
 
-  const CONTENT_VERSION = '0.9.2';
+  const CONTENT_VERSION = '1.0.0b';
   const existingHost = document.getElementById('tabcat-shadow-host');
   if (existingHost) {
     if (existingHost.dataset.version === CONTENT_VERSION) return;
@@ -57,7 +57,48 @@
       image-rendering: crisp-edges;
       display: block;
       transform-origin: 50% 10%;
-      transition: transform 0.08s linear;
+      transition: transform 0.08s linear, opacity 0.25s ease, filter 0.25s ease;
+    }
+
+    .tabcat-canvas.ghost-glow {
+      opacity: 0.78;
+      filter: drop-shadow(0 0 8px rgba(130, 230, 255, 0.85));
+    }
+
+    .tabcat-note {
+      position: absolute;
+      bottom: calc(100% - 8px);
+      left: 50%;
+      font-size: 16px;
+      font-weight: 900;
+      color: #6cd4ff;
+      pointer-events: none;
+      text-shadow: 0 1px 0 #1e293b;
+      animation: tabcat-float-up 1.2s ease-out forwards;
+    }
+
+    .tabcat-sweat {
+      position: absolute;
+      bottom: 66%;
+      left: 78%;
+      font-size: 14px;
+      pointer-events: none;
+      animation: tabcat-float-up 1.0s ease-out forwards;
+    }
+
+    .tabcat-wind {
+      position: absolute;
+      bottom: 35%;
+      left: 10%;
+      font-size: 16px;
+      pointer-events: none;
+      animation: tabcat-wind-whoosh 0.7s ease-out forwards;
+    }
+
+    @keyframes tabcat-wind-whoosh {
+      0% { opacity: 0; transform: translateX(12px) scale(0.8); }
+      25% { opacity: 0.95; }
+      100% { opacity: 0; transform: translateX(-46px) scale(1.1); }
     }
 
     .tabcat-kitten {
@@ -493,6 +534,12 @@
   let catHeight = GRID_H * catScale;
   let kittenWidth = Math.round(catWidth * 0.62);
   let kittenHeight = Math.round(catHeight * 0.62);
+  let boxWidth = 64;
+  let boxHeight = 36;
+  let trampWidth = 72;
+  let trampHeight = 28;
+  let bedWidth = 72;
+  let bedHeight = 28;
 
   function applyCatScale(scale) {
     const s = Math.max(2, Math.min(5, Math.round(Number(scale) || 3)));
@@ -516,6 +563,38 @@
     kittenCanvas.style.height = `${kittenHeight}px`;
     kittenCanvas.width = GRID_W * kScale;
     kittenCanvas.height = GRID_H * kScale;
+
+    // Scale cardboard box, trampoline & cat bed proportionally to cat size!
+    const propPx = Math.max(3, Math.round(s * 1.4));
+    boxWidth = 16 * propPx;
+    boxHeight = 9 * propPx;
+    boxEl.style.width = `${boxWidth}px`;
+    boxEl.style.height = `${boxHeight}px`;
+    boxCanvas.style.width = `${boxWidth}px`;
+    boxCanvas.style.height = `${boxHeight}px`;
+    boxCanvas.width = boxWidth;
+    boxCanvas.height = boxHeight;
+    renderEmptyBox(boxCanvas);
+
+    trampWidth = 18 * propPx;
+    trampHeight = 7 * propPx;
+    trampEl.style.width = `${trampWidth}px`;
+    trampEl.style.height = `${trampHeight}px`;
+    trampCanvas.style.width = `${trampWidth}px`;
+    trampCanvas.style.height = `${trampHeight}px`;
+    trampCanvas.width = trampWidth;
+    trampCanvas.height = trampHeight;
+    renderTrampoline(trampCanvas, 0);
+
+    bedWidth = 18 * propPx;
+    bedHeight = 7 * propPx;
+    bedEl.style.width = `${bedWidth}px`;
+    bedEl.style.height = `${bedHeight}px`;
+    bedCanvas.style.width = `${bedWidth}px`;
+    bedCanvas.style.height = `${bedHeight}px`;
+    bedCanvas.width = bedWidth;
+    bedCanvas.height = bedHeight;
+    renderCatBed(bedCanvas);
   }
   applyCatScale(3);
 
@@ -541,6 +620,15 @@
     hasKitten: false,
     kittenEnabled: false,
     catnipUntilTs: 0,
+    activeTabAudible: false,
+    tabsOverloaded: false,
+    openTabsCount: 1,
+    hasShownOverloadBubble: false,
+    lastNoteTime: 0,
+    lastSweatTime: 0,
+    windUntil: 0,
+    windDir: 1,
+    lastWindBubbleTs: 0,
     isActiveSiteSleepy: false,
     sleepySinceTs: null,
     sleepyLimitMinutes: 5,
@@ -617,7 +705,7 @@
   // Cardboard box state (draggable!)
   const toyBox = {
     x: Math.floor(initialWidth * 0.35),
-    y: (window.innerHeight || 700) - 38,
+    y: (window.innerHeight || 700) - boxHeight - 2,
     catInside: false,
     isDragging: false,
     dragMoved: false,
@@ -628,7 +716,7 @@
   // Trampoline state (draggable in X & Y + 360 flip jump!)
   const toyTramp = {
     x: Math.floor(initialWidth * 0.42),
-    y: (window.innerHeight || 700) - 30,
+    y: (window.innerHeight || 700) - trampHeight - 2,
     isDragging: false,
     dragMoved: false,
     dragOffsetX: 0,
@@ -641,7 +729,7 @@
   // Cozy cat bed state (draggable in X & Y!)
   const toyBed = {
     x: Math.floor(initialWidth * 0.28),
-    y: (window.innerHeight || 700) - 30,
+    y: (window.innerHeight || 700) - bedHeight - 2,
     isDragging: false,
     dragMoved: false,
     dragOffsetX: 0,
@@ -739,13 +827,13 @@
     }
     const vw = window.innerWidth || 1000;
     const vh = window.innerHeight || 700;
-    toyBox.x = Math.max(12, Math.min(vw - 76, nextX));
+    toyBox.x = Math.max(12, Math.min(vw - boxWidth - 12, nextX));
     if (state.allowFreeDrag) {
-      toyBox.y = Math.max(Math.max(16, catHeight - 24), Math.min(vh - 38, nextY));
+      toyBox.y = Math.max(Math.max(16, catHeight - Math.round(boxHeight * 0.65)), Math.min(vh - boxHeight - 2, nextY));
     }
     // Live-update cat's destination if it was already walking toward the box!
     if (state.mode === 'walk' && state.activeToy === 'box' && state.targetX !== null) {
-      walkToProp(toyBox.x + 32, toyBox.y + 36, 8000);
+      walkToProp(toyBox.x + boxWidth / 2, toyBox.y + boxHeight, 8000);
     }
   });
 
@@ -756,7 +844,7 @@
     try { boxEl.releasePointerCapture(e.pointerId); } catch (_) {}
 
     if (!toyBox.dragMoved && state.activeToy === 'box') {
-      walkToProp(toyBox.x + 32, toyBox.y + 36, 8000);
+      walkToProp(toyBox.x + boxWidth / 2, toyBox.y + boxHeight, 8000);
     }
   }
   boxEl.addEventListener('pointerup', endBoxDrag);
@@ -781,12 +869,12 @@
     }
     const vw = window.innerWidth || 1000;
     const vh = window.innerHeight || 700;
-    toyTramp.x = Math.max(12, Math.min(vw - 84, nx));
+    toyTramp.x = Math.max(12, Math.min(vw - trampWidth - 12, nx));
     if (state.allowFreeDrag) {
-      toyTramp.y = Math.max(Math.max(24, catHeight), Math.min(vh - 30, ny));
+      toyTramp.y = Math.max(Math.max(24, catHeight), Math.min(vh - trampHeight - 2, ny));
     }
     if (state.mode === 'walk' && state.activeToy === 'trampoline' && state.targetX !== null) {
-      walkToProp(toyTramp.x + 36, toyTramp.y + 28, 8000);
+      walkToProp(toyTramp.x + trampWidth / 2, toyTramp.y + trampHeight, 8000);
     }
   });
   function endTrampDrag(e) {
@@ -795,7 +883,7 @@
     trampEl.classList.remove('dragging');
     try { trampEl.releasePointerCapture(e.pointerId); } catch (_) {}
     if (!toyTramp.dragMoved && state.activeToy === 'trampoline') {
-      walkToProp(toyTramp.x + 36, toyTramp.y + 28, 8000);
+      walkToProp(toyTramp.x + trampWidth / 2, toyTramp.y + trampHeight, 8000);
     }
   }
   trampEl.addEventListener('pointerup', endTrampDrag);
@@ -820,16 +908,16 @@
     }
     const vw = window.innerWidth || 1000;
     const vh = window.innerHeight || 700;
-    toyBed.x = Math.max(12, Math.min(vw - 84, nx));
+    toyBed.x = Math.max(12, Math.min(vw - bedWidth - 12, nx));
     if (state.allowFreeDrag) {
-      toyBed.y = Math.max(Math.max(16, catHeight - 20), Math.min(vh - 30, ny));
+      toyBed.y = Math.max(Math.max(16, catHeight - Math.round(bedHeight * 0.7)), Math.min(vh - bedHeight - 2, ny));
     }
     if (toyBed.catSleepingInBed) {
-      const pos = getClampedWalkTarget(toyBed.x + 36 - catWidth / 2, toyBed.y + 28 - catHeight);
+      const pos = getClampedWalkTarget(toyBed.x + bedWidth / 2 - catWidth / 2, toyBed.y + bedHeight - catHeight);
       state.x = pos.x;
       state.y = pos.y;
     } else if (state.mode === 'walk' && state.activeToy === 'bed' && state.targetX !== null) {
-      walkToProp(toyBed.x + 36, toyBed.y + 28, 8000);
+      walkToProp(toyBed.x + bedWidth / 2, toyBed.y + bedHeight, 8000);
     }
   });
   function endBedDrag(e) {
@@ -839,7 +927,7 @@
     try { bedEl.releasePointerCapture(e.pointerId); } catch (_) {}
     if (!toyBed.dragMoved && state.activeToy === 'bed') {
       toyBed.catSleepingInBed = false;
-      walkToProp(toyBed.x + 36, toyBed.y + 28, 8000);
+      walkToProp(toyBed.x + bedWidth / 2, toyBed.y + bedHeight, 8000);
     }
   }
   bedEl.addEventListener('pointerup', endBedDrag);
@@ -1003,6 +1091,56 @@
     setTimeout(() => z.remove(), 2150);
   }
 
+  function spawnMusicNote() {
+    const n = document.createElement('span');
+    n.className = 'tabcat-note';
+    n.textContent = Math.random() < 0.5 ? '♪' : '♫';
+    const dx = Math.round((Math.random() - 0.5) * 44);
+    n.style.setProperty('--dx', `${dx}px`);
+    actor.appendChild(n);
+    setTimeout(() => n.remove(), 1250);
+  }
+
+  function spawnSweatDrop() {
+    const s = document.createElement('span');
+    s.className = 'tabcat-sweat';
+    s.textContent = '💦';
+    actor.appendChild(s);
+    setTimeout(() => s.remove(), 1050);
+  }
+
+  function spawnWindGust() {
+    const w = document.createElement('span');
+    w.className = 'tabcat-wind';
+    w.textContent = '💨';
+    actor.appendChild(w);
+    setTimeout(() => w.remove(), 750);
+  }
+
+  // Fast scroll wind reaction!
+  let lastScrollY = window.scrollY || 0;
+  let lastScrollTs = performance.now();
+  window.addEventListener('scroll', () => {
+    if (!isEffectivelyVisible()) return;
+    const now = performance.now();
+    const curY = window.scrollY || 0;
+    const dy = curY - lastScrollY;
+    const dt = Math.max(16, now - lastScrollTs);
+    lastScrollY = curY;
+    lastScrollTs = now;
+
+    // Detect sharp fast scroll burst
+    if (Math.abs(dy) > 170 && dt < 220 && Date.now() > state.windUntil) {
+      state.windUntil = Date.now() + 850;
+      state.windDir = dy > 0 ? 1 : -1;
+      spawnWindGust();
+      if (Date.now() - state.lastWindBubbleTs > 14000) {
+        state.lastWindBubbleTs = Date.now();
+        showBubble(tr('phraseScrollWind'), 2200);
+      }
+    }
+  }, { passive: true });
+
   function triggerHappy(phrase) {
     toyBox.catInside = false;
     toyBed.catSleepingInBed = false;
@@ -1134,7 +1272,7 @@
     if (state.yarnMode || state.activeToy === 'laser' || state.activeToy === 'mouse') return;
 
     if (state.activeToy === 'trampoline' && Math.random() < 0.65) {
-      walkToProp(toyTramp.x + 36, toyTramp.y + 28, 9000);
+      walkToProp(toyTramp.x + trampWidth / 2, toyTramp.y + trampHeight, 9000);
       return;
     }
 
@@ -1145,7 +1283,7 @@
         return;
       }
       if (Math.random() < 0.65) {
-        walkToProp(toyBed.x + 36, toyBed.y + 28, 9000);
+        walkToProp(toyBed.x + bedWidth / 2, toyBed.y + bedHeight, 9000);
         return;
       }
     }
@@ -1159,7 +1297,7 @@
         return;
       }
       if (Math.random() < 0.65) {
-        walkToProp(toyBox.x + 32, toyBox.y + 36, 9000);
+        walkToProp(toyBox.x + boxWidth / 2, toyBox.y + boxHeight, 9000);
         return;
       }
     }
@@ -1229,20 +1367,20 @@
     if (vw && vw >= catWidth + 24) {
       const maxX = Math.max(12, vw - catWidth - 12);
       state.x = Math.max(12, Math.min(maxX, state.x));
-      toyBox.x = Math.max(12, Math.min(vw - 76, toyBox.x));
-      toyTramp.x = Math.max(12, Math.min(vw - 84, toyTramp.x));
-      toyBed.x = Math.max(12, Math.min(vw - 84, toyBed.x));
+      toyBox.x = Math.max(12, Math.min(vw - boxWidth - 12, toyBox.x));
+      toyTramp.x = Math.max(12, Math.min(vw - trampWidth - 12, toyTramp.x));
+      toyBed.x = Math.max(12, Math.min(vw - bedWidth - 12, toyBed.x));
     }
     if (vh && vh >= catHeight + 14) {
       const floorY = getFloorY();
       if (!state.allowFreeDrag) {
-        toyBox.y = vh - 38;
-        toyTramp.y = vh - 30;
-        toyBed.y = vh - 30;
+        toyBox.y = vh - boxHeight - 2;
+        toyTramp.y = vh - trampHeight - 2;
+        toyBed.y = vh - bedHeight - 2;
       } else {
-        toyBox.y = Math.max(16, Math.min(vh - 38, toyBox.y));
-        toyTramp.y = Math.max(24, Math.min(vh - 30, toyTramp.y));
-        toyBed.y = Math.max(16, Math.min(vh - 30, toyBed.y));
+        toyBox.y = Math.max(16, Math.min(vh - boxHeight - 2, toyBox.y));
+        toyTramp.y = Math.max(24, Math.min(vh - trampHeight - 2, toyTramp.y));
+        toyBed.y = Math.max(16, Math.min(vh - bedHeight - 2, toyBed.y));
       }
       toyMouse.y = vh - 23;
       const inFlip = Date.now() < toyTramp.flipUntil;
@@ -1353,6 +1491,7 @@
       spawnHearts(4);
       chooseNextBehavior();
     } else if (ev.type === 'hat_equipped') triggerHappy(pickTr('phrasesHat'));
+    else if (ev.type === 'overload_cleared') triggerHappy(tr('phraseOverloadClear'));
     else if (ev.type === 'wake_up') triggerHappy(pickTr('phrasesWakeUp'));
     else if (ev.type === 'pomodoro_started') {
       state.mode = 'focus';
@@ -1391,6 +1530,9 @@
       'isActiveSiteSleepy',
       'sleepySinceTs',
       'sleepyLimitMinutes',
+      'activeTabAudible',
+      'tabsOverloaded',
+      'openTabsCount',
       'pomodoro'
     ],
     (data) => {
@@ -1413,7 +1555,11 @@
       state.isActiveSiteSleepy = Boolean(data.isActiveSiteSleepy);
       state.sleepySinceTs = data.sleepySinceTs || null;
       state.sleepyLimitMinutes = Number(data.sleepyLimitMinutes) || 5;
+      state.activeTabAudible = Boolean(data.activeTabAudible);
+      state.tabsOverloaded = Boolean(data.tabsOverloaded);
+      state.openTabsCount = Number(data.openTabsCount) || 1;
       state.pomodoroPhase = (data.pomodoro && data.pomodoro.phase) || 'idle';
+      canvas.classList.toggle('ghost-glow', state.color === 'ghost');
       if (data.lastEvent && data.lastEvent.ts) {
         state.lastHandledEventTs = data.lastEvent.ts;
       }
@@ -1449,13 +1595,21 @@
       applyLangTexts();
     }
     if (changes.catName) state.catName = changes.catName.newValue || '';
-    if (changes.catColor) state.color = changes.catColor.newValue || 'ginger';
+    if (changes.catColor) {
+      state.color = changes.catColor.newValue || 'ginger';
+      canvas.classList.toggle('ghost-glow', state.color === 'ghost');
+    }
     if (changes.equippedHat) state.equippedHat = changes.equippedHat.newValue || 'none';
     if (changes.equippedSweater) state.equippedSweater = changes.equippedSweater.newValue || 'none';
     if (changes.equippedAccessory) state.equippedAccessory = changes.equippedAccessory.newValue || 'none';
     if (changes.catScale) {
       applyCatScale(changes.catScale.newValue);
       clampPosition();
+      if (toyBed.catSleepingInBed) {
+        const pos = getClampedWalkTarget(toyBed.x + bedWidth / 2 - catWidth / 2, toyBed.y + bedHeight - catHeight);
+        state.x = pos.x;
+        state.y = pos.y;
+      }
     }
     if (changes.visible) {
       state.visible = Boolean(changes.visible.newValue);
@@ -1520,19 +1674,19 @@
         toyMouse.y = vh - 23;
         if (document.visibilityState === 'visible') showBubble(tr('phraseMouse'), 2600);
       } else if (state.activeToy === 'box') {
-        toyBox.x = Math.max(40, Math.min(vw - 120, Math.floor(vw * 0.35)));
-        toyBox.y = vh - 38;
-        walkToProp(toyBox.x + 32, toyBox.y + 36, 9000);
+        toyBox.x = Math.max(40, Math.min(vw - boxWidth - 40, Math.floor(vw * 0.35)));
+        toyBox.y = vh - boxHeight - 2;
+        walkToProp(toyBox.x + boxWidth / 2, toyBox.y + boxHeight, 9000);
         if (document.visibilityState === 'visible') showBubble(tr('phraseBox'), 2600);
       } else if (state.activeToy === 'trampoline') {
-        toyTramp.x = Math.max(40, Math.min(vw - 120, Math.floor(vw * 0.42)));
-        toyTramp.y = vh - 30;
-        walkToProp(toyTramp.x + 36, toyTramp.y + 28, 9000);
+        toyTramp.x = Math.max(40, Math.min(vw - trampWidth - 40, Math.floor(vw * 0.42)));
+        toyTramp.y = vh - trampHeight - 2;
+        walkToProp(toyTramp.x + trampWidth / 2, toyTramp.y + trampHeight, 9000);
         if (document.visibilityState === 'visible') showBubble(tr('phraseTrampoline'), 2600);
       } else if (state.activeToy === 'bed') {
-        toyBed.x = Math.max(40, Math.min(vw - 120, Math.floor(vw * 0.28)));
-        toyBed.y = vh - 30;
-        walkToProp(toyBed.x + 36, toyBed.y + 28, 9000);
+        toyBed.x = Math.max(40, Math.min(vw - bedWidth - 40, Math.floor(vw * 0.28)));
+        toyBed.y = vh - bedHeight - 2;
+        walkToProp(toyBed.x + bedWidth / 2, toyBed.y + bedHeight, 9000);
         if (document.visibilityState === 'visible') showBubble(tr('phraseBed'), 2600);
       } else if (state.activeToy === 'none') {
         state.mode = state.pomodoroPhase === 'focus' ? 'focus' : 'sit';
@@ -1546,6 +1700,24 @@
       if (!state.sleepySinceTs) state.hasShownYawnBubble = false;
     }
     if (changes.sleepyLimitMinutes) state.sleepyLimitMinutes = Number(changes.sleepyLimitMinutes) || 5;
+    if (changes.activeTabAudible) {
+      state.activeTabAudible = Boolean(changes.activeTabAudible.newValue);
+      if (state.activeTabAudible && document.visibilityState === 'visible' && isEffectivelyVisible() && state.sleepStage === 'awake') {
+        showBubble(tr('phraseMusic'), 2800);
+      } else if (!state.activeTabAudible && state.mode === 'music') {
+        state.mode = 'sit';
+        state.modeUntil = Date.now() + 2000;
+      }
+    }
+    if (changes.tabsOverloaded) {
+      state.tabsOverloaded = Boolean(changes.tabsOverloaded.newValue);
+      if (!state.tabsOverloaded) state.hasShownOverloadBubble = false;
+      if (state.tabsOverloaded && !state.hasShownOverloadBubble && document.visibilityState === 'visible' && isEffectivelyVisible()) {
+        state.hasShownOverloadBubble = true;
+        showBubble(tr('phraseOverload'), 3400);
+      }
+    }
+    if (changes.openTabsCount) state.openTabsCount = Number(changes.openTabsCount.newValue) || 1;
     if (changes.pomodoro) {
       const nextPhase = (changes.pomodoro.newValue && changes.pomodoro.newValue.phase) || 'idle';
       const prevPhase = state.pomodoroPhase;
@@ -1837,16 +2009,17 @@
             state.targetX = null;
             state.targetY = null;
 
-            const boxCenterX = toyBox.x + 32;
-            const boxBottomY = toyBox.y + 36;
-            const trampCenterX = toyTramp.x + 36;
-            const trampBottomY = toyTramp.y + 28;
-            const bedCenterX = toyBed.x + 36;
-            const bedBottomY = toyBed.y + 28;
+            const boxCenterX = toyBox.x + boxWidth / 2;
+            const boxBottomY = toyBox.y + boxHeight;
+            const trampCenterX = toyTramp.x + trampWidth / 2;
+            const trampBottomY = toyTramp.y + trampHeight;
+            const bedCenterX = toyBed.x + bedWidth / 2;
+            const bedBottomY = toyBed.y + bedHeight;
             const catFeetX = state.x + catWidth / 2;
             const catFeetY = state.y + catHeight;
+            const snapRadius = Math.max(42, Math.round(catWidth * 0.55));
 
-            if (state.activeToy === 'box' && Math.hypot(catFeetX - boxCenterX, catFeetY - boxBottomY) < 42) {
+            if (state.activeToy === 'box' && Math.hypot(catFeetX - boxCenterX, catFeetY - boxBottomY) < snapRadius) {
               const snap = getClampedWalkTarget(boxCenterX - catWidth / 2, boxBottomY - catHeight);
               state.x = snap.x;
               state.y = snap.y;
@@ -1854,7 +2027,7 @@
               state.mode = 'box';
               state.modeUntil = wallNow + 7000;
               updateToysUI();
-            } else if (state.activeToy === 'trampoline' && Math.hypot(catFeetX - trampCenterX, catFeetY - trampBottomY) < 42) {
+            } else if (state.activeToy === 'trampoline' && Math.hypot(catFeetX - trampCenterX, catFeetY - trampBottomY) < snapRadius) {
               const snap = getClampedWalkTarget(trampCenterX - catWidth / 2, trampBottomY - catHeight);
               state.x = snap.x;
               state.y = snap.y;
@@ -1866,7 +2039,7 @@
               spawnHearts(3);
               showBubble(tr('phraseTrampoline'), 2600);
               chrome.runtime.sendMessage({ type: 'YARN_CATCH' }).catch(() => {});
-            } else if (state.activeToy === 'bed' && Math.hypot(catFeetX - bedCenterX, catFeetY - bedBottomY) < 42) {
+            } else if (state.activeToy === 'bed' && Math.hypot(catFeetX - bedCenterX, catFeetY - bedBottomY) < snapRadius) {
               const snap = getClampedWalkTarget(bedCenterX - catWidth / 2, bedBottomY - catHeight);
               state.x = snap.x;
               state.y = snap.y;
@@ -1893,11 +2066,49 @@
         spawnZzz();
       }
 
+      // Music vibing mode when audio plays on the active tab!
+      const canVibeMusic =
+        state.activeTabAudible &&
+        state.sleepStage === 'awake' &&
+        !state.yarnMode &&
+        state.activeToy === 'none' &&
+        !state.isDragging &&
+        !isCatnipActive() &&
+        state.mode !== 'happy' &&
+        state.mode !== 'pet' &&
+        state.mode !== 'eat' &&
+        state.mode !== 'focus';
+
+      if (canVibeMusic) {
+        state.mode = 'music';
+        state.targetX = null;
+        state.targetY = null;
+        if (now - state.lastNoteTime > 950) {
+          state.lastNoteTime = now;
+          spawnMusicNote();
+        }
+      }
+
+      // Tab overload sweat drops (>15 open tabs)
+      if (state.tabsOverloaded && state.sleepStage === 'awake' && now - state.lastSweatTime > 2600) {
+        state.lastSweatTime = now;
+        spawnSweatDrop();
+      }
+
+      // Fast-scroll wind gust lean
+      if (wallNow < state.windUntil && !state.isDragging && wallNow >= toyTramp.flipUntil) {
+        canvas.style.transform = `skewX(${state.windDir * 12}deg) scaleY(0.92)`;
+      } else if (state.windUntil > 0 && wallNow >= state.windUntil && !state.isDragging && wallNow >= toyTramp.flipUntil) {
+        state.windUntil = 0;
+        canvas.style.transform = 'rotate(0deg)';
+      }
+
       clampPosition();
       actor.style.transform = `translate3d(${Math.round(state.x)}px, ${Math.round(state.y)}px, 0)`;
 
       const frameInterval =
         state.mode === 'walk' ? (zoomies ? 85 : (state.yarnMode || state.activeToy !== 'none') ? 105 : 145) :
+        state.mode === 'music' ? 280 :
         state.mode === 'held' ? 240 :
         state.mode === 'happy' ? 220 :
         state.mode === 'eat' ? 260 :

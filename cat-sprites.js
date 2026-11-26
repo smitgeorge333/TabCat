@@ -97,6 +97,32 @@
       P: '#ff8fab', // rosy nose
       G: '#6cd4ff',
       F: '#58b4e8'
+    },
+    ghost: {
+      name: 'Призрак',
+      hint: 'Редкий скин',
+      swatch: '#b8f2ff',
+      O: '#4ea8de', // glowing cyan-blue outline
+      B: '#e0fbff', // ethereal pale mist fur
+      S: '#a6e3f5', // spectral wisps
+      C: '#ffffff', // glowing core
+      E: '#1e3a5f', // cute spooky dark eyes
+      P: '#80ed99', // spectral mint blush
+      G: '#6cd4ff',
+      F: '#58b4e8'
+    },
+    astro: {
+      name: 'Космонавт',
+      hint: 'Редкий скин',
+      swatch: '#e2e8f0',
+      O: '#1e293b', // dark space-suit outline
+      B: '#f1f5f9', // white space suit
+      S: '#f97316', // NASA orange mission stripes
+      C: '#38bdf8', // blue visor / chest panel
+      E: '#0f172a', // dark eyes inside visor
+      P: '#fb7185', // cute nose
+      G: '#6cd4ff',
+      F: '#58b4e8'
     }
   };
 
@@ -104,15 +130,21 @@
     { id: 'siamese', price: 7, icon: '🐈', swatch: '#f3e5d0' },
     { id: 'calico', price: 8, icon: '🐱', swatch: '#f7a541' },
     { id: 'cyber', price: 10, icon: '🤖', swatch: '#26324d' },
+    { id: 'ghost', price: 11, icon: '👻', swatch: '#b8f2ff' },
+    { id: 'astro', price: 12, icon: '👨‍🚀', swatch: '#e2e8f0' },
     { id: 'golden', price: 0, achievementOnly: true, icon: '🌟', swatch: '#ffd700' }
   ];
 
   const ACCESSORIES = [
     { id: 'none', price: 0, icon: '🐾' },
     { id: 'cyber_glasses', price: 5, icon: '🕶️' },
+    { id: 'minimal_glasses', price: 5, icon: '👓' },
+    { id: 'retro_glasses', price: 6, icon: '😎' },
     { id: 'scarf', price: 4, icon: '🧣' },
     { id: 'bowtie', price: 4, icon: '🎀' },
-    { id: 'wings', price: 10, icon: '🪽' }
+    { id: 'wings', price: 10, icon: '🪽' },
+    { id: 'headphones', price: 8, icon: '🎧', secretAudible: true },
+    { id: 'star_glasses', price: 0, giftOnly: true, icon: '⭐' }
   ];
 
   const TREATS = [
@@ -143,7 +175,14 @@
     r: '#e63946', // scarf / bowtie red
     w: '#fff5eb', // scarf stripe / angel wing white
     b: '#cfe8ff', // wing shadow
-    g: '#ffd166'  // gold dot
+    g: '#ffd166', // gold frame / dot
+    m: 'rgba(38, 42, 54, 0.72)',    // minimalist semi-transparent thin frame
+    l: 'rgba(186, 232, 255, 0.30)', // minimalist translucent glass lens
+    s: 'rgba(255, 255, 255, 0.55)', // subtle glass glint
+    v: 'rgba(139, 92, 246, 0.78)',  // retro tinted violet lens
+    h: '#4b5563', // headphone band
+    p: '#38bdf8', // headphone cyan earpad
+    k: '#ff4d8d'  // festive star lens pink
   };
 
   const ACC_SHAPES = {
@@ -154,6 +193,47 @@
         'ooooooooo',
         'occooocco',
         'ooooooooo'
+      ]
+    },
+    minimal_glasses: {
+      anchor: 'head',
+      dx: -4, dy: 4,
+      rows: [
+        '.mm...mm.',
+        'mslmmmlsm',
+        '.mm...mm.'
+      ]
+    },
+    retro_glasses: {
+      anchor: 'head',
+      dx: -4, dy: 4,
+      rows: [
+        'ggggggggg',
+        'gvvgggvvg',
+        '.gg...gg.'
+      ]
+    },
+    star_glasses: {
+      anchor: 'head',
+      dx: -4, dy: 4,
+      rows: [
+        '.g.....g.',
+        'gkgggggkg',
+        '.g.....g.'
+      ]
+    },
+    headphones: {
+      anchor: 'head',
+      dx: -6, dy: -2,
+      rows: [
+        '..ooooooooo..',
+        '.ohhhhhhhhho.',
+        'oh.........ho',
+        'oh.........ho',
+        'oo.........oo',
+        'op.........po',
+        'op.........po',
+        '.o.........o.'
       ]
     },
     scarf: {
@@ -197,7 +277,8 @@
     walk:  [[14, 10], [14, 9], [14, 10], [14, 9]],
     yawn:  [[14, 15], [14, 15]],
     sleep: [[14, 16], [14, 17]],
-    box:   [[12, 10], [12, 10]]
+    box:   [[12, 10], [12, 10]],
+    music: [[11, 11], [11, 12]]
   };
 
   // Hat catalog & colors
@@ -210,7 +291,8 @@
     { id: 'wizard', name: 'Маг', price: 6, icon: '🧙' },
     { id: 'viking', name: 'Викинг', price: 7, icon: '⛑️' },
     { id: 'crown', name: 'Корона', price: 8, icon: '👑' },
-    { id: 'halo', name: 'Нимб', price: 0, achievementOnly: true, icon: '😇' }
+    { id: 'halo', name: 'Нимб', price: 0, achievementOnly: true, icon: '😇' },
+    { id: 'party_hat', name: 'Колпак', price: 0, giftOnly: true, icon: '🎉' }
   ];
 
   // Sweater catalog
@@ -222,7 +304,8 @@
     { id: 'hacker', name: 'Хакер', price: 6, icon: '💻' },
     { id: 'sakura', name: 'Сакура', price: 7, icon: '🌸' },
     { id: 'tuxedo', name: 'Смокинг', price: 7, icon: '🤵' },
-    { id: 'royal_cape', name: 'Мантия', price: 9, icon: '✨' }
+    { id: 'royal_cape', name: 'Мантия', price: 9, icon: '✨' },
+    { id: 'party_sweater', name: 'Праздник', price: 0, giftOnly: true, icon: '🎊' }
   ];
 
   const SWEATER_COLORS = {
@@ -232,7 +315,8 @@
     hacker:     { m: '#1f242d', d: '#00e676', a: '#2e3645' },
     sakura:     { m: '#ffb3cc', d: '#ff6b9e', a: '#fff5f8' },
     tuxedo:     { m: '#222430', d: '#ffffff', a: '#e63946' },
-    royal_cape: { m: '#734dff', d: '#4f2cc7', a: '#ffd13b' }
+    royal_cape: { m: '#734dff', d: '#4f2cc7', a: '#ffd13b' },
+    party_sweater: { m: '#ff4d8d', d: '#ffd13b', a: '#38bdf8' }
   };
 
   // Sweater overlays tailored to upright poses vs side-view poses
@@ -260,6 +344,7 @@
     focus: { shape: SWEATER_UPRIGHT, pos: [[7, 13], [7, 13]] },
     eat:   { shape: SWEATER_UPRIGHT, pos: [[7, 13], [7, 14]] },
     held:  { shape: SWEATER_UPRIGHT, pos: [[8, 11], [8, 11]] },
+    music: { shape: SWEATER_UPRIGHT, pos: [[7, 13], [7, 14]] },
     idle:  { shape: SWEATER_SIDE,    pos: [[5, 11], [5, 11]] },
     walk:  { shape: SWEATER_SIDE,    pos: [[5, 11], [5, 10], [5, 11], [5, 10]] },
     yawn:  { shape: SWEATER_SIDE,    pos: [[3, 13], [3, 13]] },
@@ -339,6 +424,13 @@
       '..yyyyyy..',
       '..........',
       '..........'
+    ],
+    party_hat: [
+      '....yy....',
+      '...ovvo...',
+      '..okyyko..',
+      '.obvkkvbo.',
+      '.oooooooo.'
     ]
   };
 
@@ -354,7 +446,8 @@
     held:  [[12, 4], [12, 4]],
     yawn:  [[15, 10], [15, 10]],
     sleep: [[15, 11], [15, 12]],
-    box:   [[12, 4], [12, 5]]
+    box:   [[12, 4], [12, 5]],
+    music: [[11, 5], [11, 6]]
   };
 
   // All frames are 24 chars wide x 20 rows tall, facing RIGHT by default.
@@ -933,6 +1026,54 @@
         '....OOOOOOOOOOOOOOO.....',
         '........................'
       ]
+    ],
+
+    // Music vibing pose: cat wearing pixel headphones, bobbing head to the beat!
+    music: [
+      [
+        '........................',
+        '.......OOOOOOOOO........',
+        '......OGGGGGGGGGO.......',
+        '.....OG.O....O..GO......',
+        '.....OGOBO..OBO.GO......',
+        '....OGOBBOOOOBBOGO......',
+        '....OGOBBSBSBSBBGO......',
+        '....OGOBBBBBBBBBGO......',
+        '....OGOBBCCBBBCCGO......',
+        '....OOOBCOCCBCOCOO......',
+        '.....OBPCCCPCCPBO.......',
+        '......OBBCCCCBO....OO...',
+        '.......OOBBBBOO...OBSO..',
+        '......OBBSBBSBBO..OSBO..',
+        '......OBBBBBBBBO...OBO..',
+        '......OBBCCCCBBO..OBSO..',
+        '......OBBCCCCBBO.OBBO...',
+        '......OBOCCOBCCOOBBO....',
+        '......OCCOOCCOOCCOO.....',
+        '.......OOOOOOOOOOO......'
+      ],
+      [
+        '........................',
+        '........................',
+        '.......OOOOOOOOO........',
+        '......OGGGGGGGGGO.......',
+        '.....OG.O....O..GO......',
+        '.....OGOBO..OBO.GO......',
+        '....OGOBBOOOOBBOGO......',
+        '....OGOBBSBSBSBBGO......',
+        '....OGOBBBBBBBBBGO......',
+        '....OGOBBCCBBBCCGO......',
+        '....OOOBCOCCBCOCOO......',
+        '.....OBPCCCPCCPBO...OO..',
+        '......OBBCCCCBO....OBSO.',
+        '.......OOBBBBOO....OSBO.',
+        '......OBBSBBSBBO...OBO..',
+        '......OBBBBBBBBO..OBSO..',
+        '......OBBCCCCBBO.OBBO...',
+        '......OBOCCOBCCOOBBO....',
+        '......OCCOOCCOOCCOO.....',
+        '.......OOOOOOOOOOO......'
+      ]
     ]
   };
 
@@ -1025,8 +1166,14 @@
       }
     }
 
-    // Foreground accessories (cyber_glasses, scarf, bowtie)
-    if (accessoryId && accessoryId !== 'none' && accessoryId !== 'wings' && ACC_SHAPES[accessoryId]) {
+    // Foreground accessories (glasses, headphones, scarf, bowtie)
+    if (
+      accessoryId &&
+      accessoryId !== 'none' &&
+      accessoryId !== 'wings' &&
+      !(accessoryId === 'headphones' && stateName === 'music') &&
+      ACC_SHAPES[accessoryId]
+    ) {
       const spec = ACC_SHAPES[accessoryId];
       const anchors = spec.anchor === 'head'
         ? (HEAD_ANCHORS[stateName] || HEAD_ANCHORS.sit)

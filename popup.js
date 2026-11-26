@@ -55,6 +55,19 @@
   const feedBtn = document.getElementById('feedBtn');
   const petBtn = document.getElementById('petBtn');
   const yarnBtn = document.getElementById('yarnBtn');
+  const minigameBtn = document.getElementById('minigameBtn');
+  const minigameBox = document.getElementById('minigameBox');
+  const minigameCanvas = document.getElementById('minigameCanvas');
+  const minigameHud = document.getElementById('minigameHud');
+  const minigameHint = document.getElementById('minigameHint');
+  const minigameStartBtn = document.getElementById('minigameStartBtn');
+  const exportSaveBtn = document.getElementById('exportSaveBtn');
+  const importSaveBtn = document.getElementById('importSaveBtn');
+  const importSaveInput = document.getElementById('importSaveInput');
+  const saveFeedback = document.getElementById('saveFeedback');
+  const streakDayLabel = document.getElementById('streakDayLabel');
+  const streakDots = document.getElementById('streakDots');
+  const claimStreakBtn = document.getElementById('claimStreakBtn');
 
   // Pomodoro
   const pomoPhaseLabel = document.getElementById('pomoPhaseLabel');
@@ -93,6 +106,8 @@
   const shopToyGrid = document.getElementById('shopToyGrid');
   const shopBgGrid = document.getElementById('shopBgGrid');
   const shopSkinGrid = document.getElementById('shopSkinGrid');
+  const releaseGiftCard = document.getElementById('releaseGiftCard');
+  const claimReleaseGiftBtn = document.getElementById('claimReleaseGiftBtn');
   const shopNotice = document.getElementById('shopNotice');
   const shopCart = document.getElementById('shopCart');
   const shopCartItem = document.getElementById('shopCartItem');
@@ -100,6 +115,7 @@
   const flyingItem = document.getElementById('flyingItem');
 
   // Wardrobe
+  const snapshotCatBtn = document.getElementById('snapshotCatBtn');
   const wardrobeCanvas = document.getElementById('wardrobeCanvas');
   const wardrobeMood = document.getElementById('wardrobeMood');
   const colorButtons = Array.from(document.querySelectorAll('.color-btn'));
@@ -152,9 +168,13 @@
   let activeTab = 'menu';
   let pendingDelivery = null;
   let dailyQuests = null;
+  let dailyStreak = { count: 0, lastClaimDate: '' };
+  let minigameCooldownUntil = 0;
   let achievements = {};
   let totalTabsClosed = 0;
   let shopPurchasesCount = 0;
+  let activeTabAudible = false;
+  let releaseGiftClaimed = false;
 
   let currentColor = 'ginger';
   let ownedHats = [];
@@ -419,7 +439,40 @@
       dailyQuestsList.appendChild(row);
     });
 
-    if (questsDot) questsDot.classList.toggle('hidden', !anyClaimable);
+    if (questsDot) {
+      const todayKey = new Date();
+      const todayStr = `${todayKey.getFullYear()}-${String(todayKey.getMonth() + 1).padStart(2, '0')}-${String(todayKey.getDate()).padStart(2, '0')}`;
+      const streakReady = !dailyStreak || dailyStreak.lastClaimDate !== todayStr;
+      questsDot.classList.toggle('hidden', !anyClaimable && !streakReady);
+    }
+
+    // Daily Streak UI
+    if (streakDots && claimStreakBtn && streakDayLabel) {
+      const nowD = new Date();
+      const todayStr = `${nowD.getFullYear()}-${String(nowD.getMonth() + 1).padStart(2, '0')}-${String(nowD.getDate()).padStart(2, '0')}`;
+      const yD = new Date();
+      yD.setDate(yD.getDate() - 1);
+      const yStr = `${yD.getFullYear()}-${String(yD.getMonth() + 1).padStart(2, '0')}-${String(yD.getDate()).padStart(2, '0')}`;
+      const st = dailyStreak || { count: 0, lastClaimDate: '' };
+      const claimedToday = st.lastClaimDate === todayStr;
+      const activeCount = claimedToday ? st.count : (st.lastClaimDate === yStr ? st.count : 0);
+      const nextDay = claimedToday ? st.count : ((activeCount % 7) + 1);
+      const nextReward = nextDay === 7 ? 10 : nextDay;
+
+      streakDayLabel.textContent = tr('streakDay', { day: activeCount });
+      streakDots.innerHTML = '';
+      for (let d = 1; d <= 7; d++) {
+        const pill = document.createElement('div');
+        pill.className = 'streak-pill' + (d <= activeCount ? ' done' : '') + (d === 7 ? ' big' : '');
+        pill.textContent = d === 7 ? '10🐟' : `${d}🐟`;
+        streakDots.appendChild(pill);
+      }
+
+      claimStreakBtn.disabled = claimedToday;
+      claimStreakBtn.textContent = claimedToday
+        ? tr('streakClaimed')
+        : tr('streakClaim', { reward: nextReward });
+    }
 
     // Achievements
     achievementsList.innerHTML = '';
@@ -461,9 +514,16 @@
   }
 
   function renderShop() {
-    // 1. Hats (skip 'none' & achievementOnly in Shop)
+    // 0. Release v1.0 Free Gift Banner state
+    if (releaseGiftCard && claimReleaseGiftBtn) {
+      releaseGiftCard.classList.toggle('claimed', releaseGiftClaimed);
+      claimReleaseGiftBtn.disabled = releaseGiftClaimed;
+      claimReleaseGiftBtn.textContent = releaseGiftClaimed ? tr('releaseGiftClaimed') : tr('releaseGiftBtn');
+    }
+
+    // 1. Hats (skip 'none', achievementOnly & giftOnly in Shop)
     shopHatGrid.innerHTML = '';
-    HATS.filter((h) => h.id !== 'none' && !h.achievementOnly).forEach((hat) => {
+    HATS.filter((h) => h.id !== 'none' && !h.achievementOnly && !h.giftOnly).forEach((hat) => {
       const isOwned = ownedHats.includes(hat.id);
       const isEquipped = equippedHat === hat.id;
       const label = tr(`hat_${hat.id}`);
@@ -496,7 +556,7 @@
 
     // 2. Sweaters
     shopSweaterGrid.innerHTML = '';
-    SWEATERS.filter((s) => s.id !== 'none').forEach((sw) => {
+    SWEATERS.filter((s) => s.id !== 'none' && !s.giftOnly).forEach((sw) => {
       const isOwned = ownedSweaters.includes(sw.id);
       const isEquipped = equippedSweater === sw.id;
       const label = tr(`sweater_${sw.id}`);
@@ -527,9 +587,13 @@
       }));
     });
 
-    // 3. Accessories (Glasses, Scarf, Bowtie, Wings)
+    // 3. Accessories (Glasses, Scarf, Bowtie, Wings + Secret Headphones while listening!)
     shopAccGrid.innerHTML = '';
-    ACCESSORIES.filter((a) => a.id !== 'none').forEach((acc) => {
+    ACCESSORIES.filter((a) => {
+      if (a.id === 'none' || a.giftOnly) return false;
+      if (a.secretAudible && !activeTabAudible && !ownedAccessories.includes(a.id)) return false;
+      return true;
+    }).forEach((acc) => {
       const isOwned = ownedAccessories.includes(acc.id);
       const isEquipped = equippedAccessory === acc.id;
       const label = tr(`acc_${acc.id}`);
@@ -1133,17 +1197,22 @@
       'yarnMode',
       'visible', 'hiddenDomains', 'allowFreeDrag', 'allowFreeRoam',
       'tabsClosed', 'fish', 'xp', 'level', 'stats',
-      'dailyQuests', 'achievements', 'shopPurchasesCount',
+      'dailyQuests', 'dailyStreak', 'releaseGiftClaimed', 'minigameCooldownUntil', 'achievements', 'shopPurchasesCount',
       'sleepyDomains', 'sleepyLimitMinutes', 'isActiveSiteSleepy', 'sleepySinceTs',
+      'activeTabAudible',
       'pomodoro'
     ],
     (data) => {
       lang = data.lang || 'en';
+      activeTabAudible = Boolean(data.activeTabAudible);
+      releaseGiftClaimed = Boolean(data.releaseGiftClaimed);
       catName = typeof data.catName === 'string' ? data.catName : '';
       if (catNameInput) catNameInput.value = catName;
       totalTabsClosed = data.tabsClosed || 0;
       shopPurchasesCount = data.shopPurchasesCount || 0;
       dailyQuests = data.dailyQuests || null;
+      dailyStreak = data.dailyStreak || { count: 0, lastClaimDate: '' };
+      minigameCooldownUntil = Number(data.minigameCooldownUntil) || 0;
       achievements = data.achievements || {};
       setActiveColorUI(data.catColor || 'ginger');
       ownedHats = Array.isArray(data.ownedHats) ? data.ownedHats : [];
@@ -1201,9 +1270,15 @@
 
   chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
     const tab = tabs && tabs[0];
-    if (tab && tab.url) {
-      activeTabDomain = normalizeDomain(tab.url);
-      renderCurrentSiteRow();
+    if (tab) {
+      if (tab.url) {
+        activeTabDomain = normalizeDomain(tab.url);
+        renderCurrentSiteRow();
+      }
+      if (Boolean(tab.audible) !== activeTabAudible) {
+        activeTabAudible = Boolean(tab.audible);
+        renderShop();
+      }
     }
   });
 
@@ -1220,6 +1295,9 @@
       renderQuestsAndAchievements();
     }
     if (changes.dailyQuests) { dailyQuests = changes.dailyQuests.newValue; renderQuestsAndAchievements(); }
+    if (changes.dailyStreak) { dailyStreak = changes.dailyStreak.newValue || { count: 0, lastClaimDate: '' }; renderQuestsAndAchievements(); }
+    if (changes.releaseGiftClaimed) { releaseGiftClaimed = Boolean(changes.releaseGiftClaimed.newValue); renderShop(); }
+    if (changes.minigameCooldownUntil) { minigameCooldownUntil = Number(changes.minigameCooldownUntil.newValue) || 0; }
     if (changes.achievements) { achievements = changes.achievements.newValue || {}; renderQuestsAndAchievements(); }
     if (changes.shopPurchasesCount) { shopPurchasesCount = changes.shopPurchasesCount.newValue || 0; renderQuestsAndAchievements(); }
     if (changes.fish) updateFishUI(changes.fish.newValue);
@@ -1258,6 +1336,10 @@
     if (changes.sleepyDomains) { sleepyDomains = changes.sleepyDomains.newValue || []; renderSleepyChips(); renderCurrentSiteRow(); }
     if (changes.sleepyLimitMinutes) { sleepyLimitMinutes = Number(changes.sleepyLimitMinutes.newValue) || 5; sleepyLimitSelect.value = String(sleepyLimitMinutes); }
     if (changes.isActiveSiteSleepy) isActiveSiteSleepy = Boolean(changes.isActiveSiteSleepy.newValue);
+    if (changes.activeTabAudible) {
+      activeTabAudible = Boolean(changes.activeTabAudible.newValue);
+      renderShop();
+    }
     if (changes.sleepySinceTs) sleepySinceTs = changes.sleepySinceTs.newValue || null;
     if (changes.pomodoro && changes.pomodoro.newValue) { pomodoro = changes.pomodoro.newValue; updatePomodoroUI(); }
     updateStatusBadge();
@@ -1404,6 +1486,310 @@
   canvas.addEventListener('click', animatePetInPopup);
   wardrobeCanvas.addEventListener('click', animatePetInPopup);
 
+  // Daily Streak Claim
+  if (claimStreakBtn) {
+    claimStreakBtn.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: 'CLAIM_DAILY_STREAK' }, (res) => {
+        if (res && res.ok) {
+          dailyStreak = res.dailyStreak;
+          updateFishUI(res.fish);
+          renderQuestsAndAchievements();
+        }
+      });
+    });
+  }
+
+  if (claimReleaseGiftBtn) {
+    claimReleaseGiftBtn.addEventListener('click', () => {
+      if (releaseGiftClaimed) return;
+      chrome.runtime.sendMessage({ type: 'CLAIM_RELEASE_GIFT' }, (res) => {
+        if (!res || !res.ok) return;
+        releaseGiftClaimed = true;
+        ownedHats = res.ownedHats || ownedHats;
+        ownedSweaters = res.ownedSweaters || ownedSweaters;
+        ownedAccessories = res.ownedAccessories || ownedAccessories;
+        equippedHat = res.equippedHat || equippedHat;
+        equippedSweater = res.equippedSweater || equippedSweater;
+        equippedAccessory = res.equippedAccessory || equippedAccessory;
+        renderShop();
+        renderWardrobe();
+        playShopPurchaseAnimation('🎁', tr('releaseGiftTitle'));
+      });
+    });
+  }
+
+  if (snapshotCatBtn) {
+    snapshotCatBtn.addEventListener('click', () => {
+      const card = document.createElement('canvas');
+      card.width = 600;
+      card.height = 420;
+      const c = card.getContext('2d');
+
+      // Background palette matching equipped room background
+      const bgThemes = {
+        default:   ['#fff7ec', '#fde4c6', '#471e0d', '#f5c79c'],
+        room:      ['#dff1ff', '#f7e5cf', '#3c2a21', '#b6d8f2'],
+        garden:    ['#d7f7dc', '#b8e8c0', '#1f4d2e', '#8cd49c'],
+        cyberpunk: ['#18122b', '#39215c', '#f5e9ff', '#00f0ff'],
+        space:     ['#0b1026', '#1e2752', '#eef4ff', '#7dd3fc']
+      };
+      const [cTop, cBot, textColor, accentColor] = bgThemes[equippedBackground] || bgThemes.default;
+      const grad = c.createLinearGradient(0, 0, 0, card.height);
+      grad.addColorStop(0, cTop);
+      grad.addColorStop(1, cBot);
+      c.fillStyle = grad;
+      c.fillRect(0, 0, card.width, card.height);
+
+      // Decorative background details
+      if (equippedBackground === 'space' || equippedBackground === 'cyberpunk') {
+        c.fillStyle = 'rgba(255,255,255,0.65)';
+        [[60,55,3],[140,90,2],[480,65,3],[530,120,2],[90,170,2],[440,145,3],[230,45,2],[370,55,2]].forEach(([sx, sy, sr]) => {
+          c.fillRect(sx, sy, sr * 2, sr * 2);
+        });
+      }
+      if (equippedBackground === 'cyberpunk') {
+        c.strokeStyle = 'rgba(0, 240, 255, 0.25)';
+        c.lineWidth = 2;
+        for (let gy = 270; gy < 420; gy += 24) {
+          c.beginPath(); c.moveTo(0, gy); c.lineTo(600, gy); c.stroke();
+        }
+      }
+
+      // Cozy pixel floor strip
+      c.fillStyle = equippedBackground === 'cyberpunk' || equippedBackground === 'space'
+        ? 'rgba(255, 255, 255, 0.08)'
+        : 'rgba(71, 30, 13, 0.08)';
+      c.fillRect(24, 286, 552, 108);
+
+      // Outer card border
+      c.strokeStyle = accentColor;
+      c.lineWidth = 8;
+      c.strokeRect(12, 12, card.width - 24, card.height - 24);
+
+      // Render crisp 8x pixel cat in full outfit!
+      const sprite = document.createElement('canvas');
+      sprite.width = 192;
+      sprite.height = 160;
+      renderFrame(sprite, 'happy', 0, currentColor, false, equippedHat, equippedSweater, equippedAccessory);
+      c.imageSmoothingEnabled = false;
+      if (currentColor === 'ghost') {
+        c.save();
+        c.globalAlpha = 0.82;
+        c.shadowColor = 'rgba(130, 230, 255, 0.9)';
+        c.shadowBlur = 18;
+        c.drawImage(sprite, 204, 108, 192, 160);
+        c.restore();
+      } else {
+        c.drawImage(sprite, 204, 108, 192, 160);
+      }
+
+      // Cat name & level title
+      const displayName = (catName && catName.trim()) ? catName.trim() : 'TabCat';
+      c.fillStyle = textColor;
+      c.textAlign = 'center';
+      c.font = '800 32px system-ui, -apple-system, Segoe UI, sans-serif';
+      c.fillText(displayName, 300, 66);
+
+      // Stats pills line
+      c.font = '700 18px system-ui, -apple-system, Segoe UI, sans-serif';
+      c.fillText(`LVL ${currentLevel}   •   🐟 ${fishCount}   •   🗂️ ${totalTabsClosed}`, 300, 330);
+
+      // Subtle footer badge
+      c.globalAlpha = 0.72;
+      c.font = '700 14px system-ui, -apple-system, Segoe UI, sans-serif';
+      c.fillText('TabCat v1.0  •  Pixel Browser Pet 🐾', 300, 372);
+      c.globalAlpha = 1;
+
+      const safeFile = displayName.toLowerCase().replace(/[^a-z0-9_-]+/g, '') || 'tabcat';
+      const a = document.createElement('a');
+      a.href = card.toDataURL('image/png');
+      a.download = `${safeFile}-card.png`;
+      a.click();
+
+      if (wardrobeStage) {
+        wardrobeStage.classList.add('flash');
+        setTimeout(() => wardrobeStage.classList.remove('flash'), 220);
+      }
+      if (wardrobeMood) wardrobeMood.textContent = tr('snapshotSaved');
+    });
+  }
+
+  // Export / Import Save JSON
+  if (exportSaveBtn) {
+    exportSaveBtn.addEventListener('click', () => {
+      chrome.storage.local.get(null, (allData) => {
+        const blob = new Blob([JSON.stringify({ app: 'TabCat', version: '1.0.0', data: allData }, null, 2)], {
+          type: 'application/json'
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'tabcat-save.json';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+      });
+    });
+  }
+
+  if (importSaveBtn && importSaveInput) {
+    importSaveBtn.addEventListener('click', () => importSaveInput.click());
+    importSaveInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(String(reader.result || ''));
+          if (!parsed || parsed.app !== 'TabCat' || !parsed.data || typeof parsed.data !== 'object') {
+            throw new Error('bad format');
+          }
+          chrome.storage.local.set(parsed.data, () => {
+            if (saveFeedback) saveFeedback.textContent = tr('importOk');
+            setTimeout(() => location.reload(), 700);
+          });
+        } catch (_) {
+          if (saveFeedback) saveFeedback.textContent = tr('importErr');
+        }
+      };
+      reader.readAsText(file);
+      importSaveInput.value = '';
+    });
+  }
+
+  // ==================== CATCH FISH MINI-GAME (15s Arcade) ====================
+  const mgSprite = document.createElement('canvas');
+  mgSprite.width = 48;
+  mgSprite.height = 40;
+  let mgRunning = false;
+  let mgCatX = 148;
+  let mgKeys = { left: false, right: false };
+
+  if (minigameBtn && minigameBox) {
+    minigameBtn.addEventListener('click', () => {
+      const isHidden = minigameBox.classList.toggle('hidden');
+      minigameBtn.classList.toggle('active', !isHidden);
+      if (isHidden && mgRunning) {
+        mgRunning = false;
+        if (minigameStartBtn) minigameStartBtn.disabled = false;
+      }
+    });
+  }
+
+  if (minigameCanvas) {
+    minigameCanvas.addEventListener('pointermove', (e) => {
+      if (!mgRunning) return;
+      const rect = minigameCanvas.getBoundingClientRect();
+      const relX = ((e.clientX - rect.left) / rect.width) * minigameCanvas.width;
+      mgCatX = Math.max(24, Math.min(minigameCanvas.width - 24, relX));
+    });
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (!mgRunning) return;
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') mgKeys.left = true;
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') mgKeys.right = true;
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') mgKeys.left = false;
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') mgKeys.right = false;
+  });
+
+  if (minigameStartBtn && minigameCanvas) {
+    minigameStartBtn.addEventListener('click', () => {
+      if (mgRunning) return;
+      const now = Date.now();
+      if (minigameCooldownUntil > now) {
+        const left = Math.ceil((minigameCooldownUntil - now) / 1000);
+        minigameHint.textContent = tr('minigameCooldown', { sec: left });
+        return;
+      }
+
+      mgRunning = true;
+      minigameStartBtn.disabled = true;
+      minigameHint.textContent = tr('minigameHint');
+
+      const mctx = minigameCanvas.getContext('2d');
+      const mw = minigameCanvas.width;
+      const mh = minigameCanvas.height;
+      let score = 0;
+      let drops = [];
+      let lastSpawn = 0;
+      let startTs = null;
+      let lastFrame = 0;
+
+      function mgLoop(ts) {
+        if (!mgRunning) return;
+        if (startTs === null) { startTs = ts; lastFrame = ts; }
+        const dt = Math.min(0.05, (ts - lastFrame) / 1000);
+        lastFrame = ts;
+        const elapsed = (ts - startTs) / 1000;
+        const leftSec = Math.max(0, 15.0 - elapsed);
+
+        if (mgKeys.left) mgCatX -= 220 * dt;
+        if (mgKeys.right) mgCatX += 220 * dt;
+        mgCatX = Math.max(24, Math.min(mw - 24, mgCatX));
+
+        if (ts - lastSpawn > 520) {
+          lastSpawn = ts;
+          const isCucumber = Math.random() < 0.28;
+          drops.push({
+            x: 18 + Math.random() * (mw - 36),
+            y: -14,
+            vy: 95 + Math.random() * 65,
+            kind: isCucumber ? 'cucumber' : 'fish'
+          });
+        }
+
+        mctx.clearRect(0, 0, mw, mh);
+
+        // Update & draw falling fish / cucumbers
+        mctx.font = '20px system-ui';
+        mctx.textAlign = 'center';
+        mctx.textBaseline = 'middle';
+        const nextDrops = [];
+        for (const d of drops) {
+          d.y += d.vy * dt;
+          if (Math.abs(d.x - mgCatX) < 26 && d.y > mh - 46 && d.y < mh - 6) {
+            if (d.kind === 'fish') score += 1;
+            else score = Math.max(0, score - 1);
+            continue;
+          }
+          if (d.y < mh + 16) {
+            mctx.fillText(d.kind === 'fish' ? '🐟' : '🥒', d.x, d.y);
+            nextDrops.push(d);
+          }
+        }
+        drops = nextDrops;
+
+        // Draw our real pixel cat!
+        renderFrame(mgSprite, 'walk', Math.floor(elapsed * 8) % 4, currentColor, mgKeys.left, equippedHat, equippedSweater, equippedAccessory);
+        mctx.imageSmoothingEnabled = false;
+        mctx.drawImage(mgSprite, Math.round(mgCatX - 24), mh - 42, 48, 40);
+
+        minigameHud.textContent = `${leftSec.toFixed(1)}s • 🐟 ${score}`;
+
+        if (elapsed < 15.0) {
+          requestAnimationFrame(mgLoop);
+        } else {
+          mgRunning = false;
+          minigameStartBtn.disabled = false;
+          const rewardFish = Math.min(5, Math.max(1, Math.ceil(score / 3)));
+          chrome.runtime.sendMessage({ type: 'MINIGAME_REWARD', fish: score > 0 ? rewardFish : 0 }, (res) => {
+            const actualFish = score > 0 ? rewardFish : 0;
+            if (res && res.ok) {
+              minigameCooldownUntil = res.cooldownUntil;
+              updateFishUI(res.fish);
+              updateStatsUI(res.stats);
+            }
+            minigameHint.textContent = tr('minigameResult', { score, fish: actualFish });
+          });
+        }
+      }
+
+      requestAnimationFrame(mgLoop);
+    });
+  }
+
   setInterval(() => {
     updatePomodoroUI();
     updateStatusBadge();
@@ -1415,9 +1801,13 @@
         stage === 'sleep' ? 'sleep' :
         stage === 'yawn' ? 'yawn' :
         pomodoro.phase === 'focus' ? 'focus' :
+        activeTabAudible ? 'music' :
         'sit';
       previewMode = modeToDraw;
     }
+    const isGhost = currentColor === 'ghost';
+    canvas.classList.toggle('ghost-glow', isGhost);
+    wardrobeCanvas.classList.toggle('ghost-glow', isGhost);
     frameIdx = (frameIdx + 1) % 2;
     renderFrame(canvas, modeToDraw, frameIdx, currentColor, false, equippedHat, equippedSweater, equippedAccessory);
     renderFrame(wardrobeCanvas, previewMode === 'happy' ? 'happy' : 'sit', frameIdx, currentColor, false, equippedHat, equippedSweater, equippedAccessory);

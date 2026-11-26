@@ -35,7 +35,8 @@ const HAT_PRICES = {
   wizard: 6,
   viking: 7,
   crown: 8,
-  halo: 0 // Achievement reward (5 Pomodoros)
+  halo: 0, // Achievement reward (5 Pomodoros)
+  party_hat: 0 // v1.0 Release Gift
 };
 
 const SWEATER_PRICES = {
@@ -46,15 +47,20 @@ const SWEATER_PRICES = {
   hacker: 6,
   sakura: 7,
   tuxedo: 7,
-  royal_cape: 9
+  royal_cape: 9,
+  party_sweater: 0 // v1.0 Release Gift
 };
 
 const ACCESSORY_PRICES = {
   none: 0,
   cyber_glasses: 5,
+  minimal_glasses: 5,
+  retro_glasses: 6,
   scarf: 4,
   bowtie: 4,
-  wings: 10
+  wings: 10,
+  headphones: 8,
+  star_glasses: 0 // v1.0 Release Gift
 };
 
 const TREAT_PRICES = {
@@ -83,6 +89,8 @@ const SKIN_PRICES = {
   siamese: 7,
   calico: 8,
   cyber: 10,
+  ghost: 11,
+  astro: 12,
   golden: 0 // Achievement reward (100 closed tabs)
 };
 
@@ -138,6 +146,12 @@ const DEFAULT_STATE = {
   shopPurchasesCount: 0,
   dailyQuests: makeFreshDailyQuests(),
   achievements: DEFAULT_ACHIEVEMENTS,
+  dailyStreak: { count: 0, lastClaimDate: '' },
+  releaseGiftClaimed: false,
+  minigameCooldownUntil: 0,
+  openTabsCount: 1,
+  tabsOverloaded: false,
+  activeTabAudible: false,
   tabsClosed: 0,
   fish: 3, // Starter treat so you can feed right away!
   starterFishGiven: true,
@@ -333,14 +347,23 @@ async function modifyStats(deltas) {
   return nextStats;
 }
 
-async function evaluateActiveTab() {
+async function evaluateActiveTab(excludeTabId = null) {
   try {
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    const rawTabs = tab && tab.windowId !== undefined
+      ? await chrome.tabs.query({ windowId: tab.windowId })
+      : await chrome.tabs.query({ lastFocusedWindow: true });
+    const windowTabs = excludeTabId !== null
+      ? rawTabs.filter((t) => t.id !== excludeTabId)
+      : rawTabs;
+    const openTabsCount = windowTabs.length;
+
     const data = await chrome.storage.local.get([
       'sleepyDomains',
       'sleepyLimitMinutes',
       'sleepySinceTs',
-      'isActiveSiteSleepy'
+      'isActiveSiteSleepy',
+      'tabsOverloaded'
     ]);
 
     const sleepyDomains = Array.isArray(data.sleepyDomains)
@@ -352,11 +375,24 @@ async function evaluateActiveTab() {
     const sleepyNow = isDomainSleepy(domain, sleepyDomains);
     const wasSleepy = Boolean(data.isActiveSiteSleepy);
     const prevSince = data.sleepySinceTs || null;
+    const wasOverloaded = Boolean(data.tabsOverloaded);
+    const nowOverloaded = openTabsCount >= 15;
 
     const patch = {
       activeDomain: domain,
-      isActiveSiteSleepy: sleepyNow
+      isActiveSiteSleepy: sleepyNow,
+      openTabsCount,
+      tabsOverloaded: nowOverloaded,
+      activeTabAudible: Boolean(tab && tab.audible)
     };
+
+    if (wasOverloaded && !nowOverloaded) {
+      patch.tabsOverloaded = false;
+      patch.lastEvent = {
+        type: 'overload_cleared',
+        ts: Date.now()
+      };
+    }
 
     if (sleepyNow) {
       if (!prevSince) {
@@ -552,11 +588,15 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   evaluateActiveTab();
 });
 
+chrome.tabs.onCreated.addListener(() => {
+  evaluateActiveTab();
+});
+
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab && tab.url) {
     ensureInjected(tabId, tab.url);
   }
-  if (tab && tab.active && (changeInfo.url || changeInfo.status === 'complete')) {
+  if (tab && tab.active && (changeInfo.url || changeInfo.status === 'complete' || changeInfo.audible !== undefined)) {
     evaluateActiveTab();
   }
 });
@@ -567,7 +607,11 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
   }
 });
 
-chrome.tabs.onRemoved.addListener(async () => {
+chrome.windows.onRemoved.addListener(() => {
+  evaluateActiveTab();
+});
+
+chrome.tabs.onRemoved.addListener(async (removedTabId) => {
   try {
     const data = await chrome.storage.local.get(['tabsClosed', 'fish', 'xp', 'stats']);
     const nextTabs = (data.tabsClosed || 0) + 1;
@@ -592,7 +636,7 @@ chrome.tabs.onRemoved.addListener(async () => {
         ts: Date.now()
       }
     });
-    await evaluateActiveTab();
+    await evaluateActiveTab(removedTabId);
     await updateQuestsAndAchievements({ tabsDelta: 1 });
   } catch (err) {
     console.warn('TabCat onRemoved error:', err);
@@ -651,6 +695,54 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       const nextFish = (data.fish || 0) + rewards[questId];
       await chrome.storage.local.set({ dailyQuests: dq, fish: nextFish });
       sendResponse({ ok: true, fish: nextFish, dailyQuests: dq });
+    });
+    return true;
+  }
+
+  if (msg.type === 'CLAIM_DAILY_STREAK') {
+    chrome.storage.local.get(['dailyStreak', 'fish']).then(async (data) => {
+      const today = getTodayKey();
+      const prev = data.dailyStreak || { count: 0, lastClaimDate: '' };
+      if (prev.lastClaimDate === today) {
+        sendResponse({ ok: false, reason: 'already_claimed' });
+        return;
+      }
+      // Check if yesterday was claimed
+      const y = new Date();
+      y.setDate(y.getDate() - 1);
+      const yesterday = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, '0')}-${String(y.getDate()).padStart(2, '0')}`;
+      const nextCount = prev.lastClaimDate === yesterday ? ((prev.count % 7) + 1) : 1;
+      const reward = nextCount === 7 ? 10 : nextCount;
+      const nextFish = (data.fish || 0) + reward;
+      const nextStreak = { count: nextCount, lastClaimDate: today };
+      await chrome.storage.local.set({ dailyStreak: nextStreak, fish: nextFish });
+      sendResponse({ ok: true, dailyStreak: nextStreak, fish: nextFish, reward });
+    });
+    return true;
+  }
+
+  if (msg.type === 'MINIGAME_REWARD') {
+    const earnedFish = Math.max(0, Math.min(5, Math.floor(Number(msg.fish) || 0)));
+    chrome.storage.local.get(['fish', 'xp', 'stats', 'minigameCooldownUntil']).then(async (data) => {
+      const now = Date.now();
+      if ((data.minigameCooldownUntil || 0) > now) {
+        sendResponse({ ok: false, reason: 'cooldown' });
+        return;
+      }
+      const nextFish = (data.fish || 0) + earnedFish;
+      const nextXp = (data.xp || 0) + 10;
+      const nextLevel = calcLevel(nextXp);
+      const stats = { ...DEFAULT_STATS, ...(data.stats || {}) };
+      const nextStats = { ...stats, pleasure: clampStat(stats.pleasure + 10) };
+      const cooldownUntil = now + 90 * 1000; // 90s rest between games
+      await chrome.storage.local.set({
+        fish: nextFish,
+        xp: nextXp,
+        level: nextLevel,
+        stats: nextStats,
+        minigameCooldownUntil: cooldownUntil
+      });
+      sendResponse({ ok: true, fish: nextFish, stats: nextStats, cooldownUntil });
     });
     return true;
   }
@@ -965,6 +1057,46 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         lastEvent: { type: 'hat_equipped', ts: Date.now() }
       });
       sendResponse({ ok: true, purchased: true, hasKitten: true, kittenEnabled: true, fish });
+    });
+    return true;
+  }
+
+  if (msg.type === 'CLAIM_RELEASE_GIFT') {
+    chrome.storage.local.get([
+      'releaseGiftClaimed',
+      'ownedHats',
+      'ownedSweaters',
+      'ownedAccessories'
+    ]).then(async (data) => {
+      const ownedHats = Array.isArray(data.ownedHats) ? [...data.ownedHats] : [];
+      const ownedSweaters = Array.isArray(data.ownedSweaters) ? [...data.ownedSweaters] : [];
+      const ownedAccessories = Array.isArray(data.ownedAccessories) ? [...data.ownedAccessories] : [];
+
+      if (!ownedHats.includes('party_hat')) ownedHats.push('party_hat');
+      if (!ownedSweaters.includes('party_sweater')) ownedSweaters.push('party_sweater');
+      if (!ownedAccessories.includes('star_glasses')) ownedAccessories.push('star_glasses');
+
+      await chrome.storage.local.set({
+        releaseGiftClaimed: true,
+        ownedHats,
+        ownedSweaters,
+        ownedAccessories,
+        equippedHat: 'party_hat',
+        equippedSweater: 'party_sweater',
+        equippedAccessory: 'star_glasses',
+        lastEvent: { type: 'hat_equipped', ts: Date.now() }
+      });
+
+      sendResponse({
+        ok: true,
+        releaseGiftClaimed: true,
+        ownedHats,
+        ownedSweaters,
+        ownedAccessories,
+        equippedHat: 'party_hat',
+        equippedSweater: 'party_sweater',
+        equippedAccessory: 'star_glasses'
+      });
     });
     return true;
   }
